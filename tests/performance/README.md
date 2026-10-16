@@ -22,7 +22,9 @@ non-development OTP providers. It verifies the canonical catalog/region,
 commerce, and inventory rows, authenticates synthetic customers through the
 real development OTP endpoints, provisions or reuses an ignored synthetic
 `SUPER_ADMIN`, and creates/replays one owned order per synthetic customer through
-the real Orders API with deterministic idempotency keys. The comma-separated
+the real StoreProfile and Orders APIs with deterministic fictional Iranian store
+locations and idempotency keys. Preparation verifies each created/replayed order
+contains the matching immutable delivery snapshot. The comma-separated
 customer tokens and order IDs are kept in the same customer order so detail
 reads always exercise an owner-matched session. It stores bearer/refresh material only in
 `.local/eggship-k6.env` and `.local/eggship-k6-auth.json`; neither file is
@@ -93,8 +95,8 @@ reset/reseed requests. It never provisions OTPs, sends SMS, or logs tokens.
 
 Prepare fixtures separately with non-production tooling or an approved
 operator run. The fixture set must contain active categories, active regions,
-active products, normal inventory with ample stock, synthetic users with
-short-lived bearer tokens, one owner-matched synthetic order per customer for reads, and an Admin
+active products, normal inventory with ample stock, synthetic users with complete
+StoreProfiles and short-lived bearer tokens, one owner-matched synthetic order per customer for reads, and an Admin
 with `ANALYTICS_READ`. Pass only IDs/tokens through the process environment;
 never commit them or put them in result artifacts. Order creation uses isolated
 synthetic users, one product/region set, and a fresh UUID idempotency key per

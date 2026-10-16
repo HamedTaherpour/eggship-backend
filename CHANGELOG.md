@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Update bounded k6 fixture preparation to provision deterministic StoreProfiles
+  and verify order delivery snapshots without changing load scenarios or thresholds.
+- Extend deterministic development/test seed fixtures with StoreProfiles, a
+  negative customer without a profile, and immutable delivery snapshots for
+  seeded historical orders.
 - Add authenticated customer StoreProfile read and update APIs for STORE-03.
 - Add additive StoreProfile persistence and nullable Order delivery snapshot columns for STORE-02.
 - Require a complete StoreProfile for new orders and persist an immutable delivery snapshot for STORE-04/05.

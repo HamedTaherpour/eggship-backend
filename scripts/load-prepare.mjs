@@ -8,11 +8,13 @@ import {
   assertFreshAccessToken,
   assertInventorySafety,
   assertLoadPreparationSafety,
+  assertSyntheticOrderSnapshot,
   ApiRequestError,
   buildAdminProvisioningArgs,
   buildAdminProvisioningSpawnOptions,
   buildAuthState,
   buildSyntheticOrderRequest,
+  buildSyntheticStoreProfile,
   ensureLoadPreparationDirectory,
   parseRetryAfterSeconds,
   redactError,
@@ -172,6 +174,30 @@ async function authenticateCustomer(phone) {
   };
 }
 
+async function prepareCustomerStoreProfile(customer, index) {
+  const profile = buildSyntheticStoreProfile(index);
+  const result = await requestJson(`${API_BASE_URL}/api/v1/users/me`, {
+    method: 'PATCH',
+    headers: {
+      Authorization: `Bearer ${customer.token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(profile),
+  });
+  const persisted = result.body?.data?.user?.storeProfile;
+  if (
+    persisted?.storeName !== profile.storeName ||
+    persisted?.address !== profile.address ||
+    persisted?.latitude !== profile.latitude ||
+    persisted?.longitude !== profile.longitude
+  ) {
+    throw new Error(
+      'Synthetic StoreProfile preparation did not persist the expected values.',
+    );
+  }
+  return profile;
+}
+
 function readAdminSecret() {
   if (!existsSync(ADMIN_SECRET_PATH)) return null;
   const value = JSON.parse(readFileSync(ADMIN_SECRET_PATH, 'utf8'));
@@ -300,6 +326,7 @@ async function prepare() {
   }
 
   const customerAuth = [];
+  const customerProfiles = [];
   let previousAuth = null;
   if (existsSync(AUTH_STATE_PATH)) {
     try {
@@ -320,10 +347,12 @@ async function prepare() {
           '/api/v1/auth/refresh',
         )
       : null;
-    customerAuth.push(
-      refreshed
-        ? { userId: cached.userId, ...refreshed }
-        : await authenticateCustomer(phone),
+    const customer = refreshed
+      ? { userId: cached.userId, ...refreshed }
+      : await authenticateCustomer(phone);
+    customerAuth.push(customer);
+    customerProfiles.push(
+      await prepareCustomerStoreProfile(customer, customerAuth.length - 1),
     );
     writeAuthState(
       SYNTHETIC_PHONES.slice(0, customerAuth.length).map(
@@ -420,6 +449,7 @@ async function prepare() {
         'Synthetic order fixture response did not include an order id.',
       );
     orderIds.push(orderId);
+    assertSyntheticOrderSnapshot(order.body?.data, customerProfiles[index]);
   }
 
   const finalClient = new Client({

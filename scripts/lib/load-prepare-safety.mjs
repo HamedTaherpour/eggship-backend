@@ -132,6 +132,60 @@ export function buildSyntheticOrderRequest(
   };
 }
 
+const SYNTHETIC_STORE_LOCATIONS = [
+  {
+    storeName: 'فروشگاه باران تهران 01',
+    address: 'تهران، خیابان ولیعصر، کوچه باران، پلاک ۱',
+    latitude: 35.6892,
+    longitude: 51.389,
+  },
+  {
+    storeName: 'فروشگاه سپیدار تهران 02',
+    address: 'تهران، خیابان انقلاب، کوچه سپیدار، پلاک ۲',
+    latitude: 35.7013,
+    longitude: 51.4078,
+  },
+  {
+    storeName: 'فروشگاه بهارستان تهران 03',
+    address: 'تهران، خیابان شریعتی، کوچه بهارستان، پلاک ۳',
+    latitude: 35.7356,
+    longitude: 51.4457,
+  },
+  {
+    storeName: 'فروشگاه نیلوفر تهران 04',
+    address: 'تهران، خیابان پاسداران، کوچه نیلوفر، پلاک ۴',
+    latitude: 35.7721,
+    longitude: 51.4612,
+  },
+  {
+    storeName: 'فروشگاه آفتاب تهران 05',
+    address: 'تهران، خیابان پیروزی، کوچه آفتاب، پلاک ۵',
+    latitude: 35.6947,
+    longitude: 51.4881,
+  },
+];
+
+export function buildSyntheticStoreProfile(index) {
+  const profile = SYNTHETIC_STORE_LOCATIONS[index];
+  if (profile === undefined) {
+    throw new Error('Synthetic StoreProfile index is outside the fixture set.');
+  }
+  return { ...profile };
+}
+
+export function assertSyntheticOrderSnapshot(order, profile) {
+  if (
+    order?.deliveryStoreName !== profile.storeName ||
+    order?.deliveryAddress !== profile.address ||
+    order?.deliveryLatitude !== profile.latitude ||
+    order?.deliveryLongitude !== profile.longitude
+  ) {
+    throw new Error(
+      'Synthetic order delivery snapshot does not match its StoreProfile.',
+    );
+  }
+}
+
 export function buildAdminProvisioningSpawnOptions() {
   return {
     stdio: ['ignore', 'pipe', 'pipe'],

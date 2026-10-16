@@ -18,6 +18,7 @@ export function assertCanonicalSeedInventoryState({
   ledger,
   reservations,
   orderLines,
+  seededOrder = null,
 }) {
   if (inventory === null) {
     if (ledger.length || reservations.length || orderLines.length) {
@@ -27,7 +28,7 @@ export function assertCanonicalSeedInventoryState({
   }
 
   if (
-    ledger.length !== 1 ||
+    ledger.length < 1 ||
     ledger[0].id !== receiveId ||
     !matchesCanonicalLedger(ledger[0], receiveId)
   ) {
@@ -36,16 +37,56 @@ export function assertCanonicalSeedInventoryState({
       'InventoryLedger is not the canonical seed event',
     );
   }
-  if (inventory.onHand !== 100 || inventory.reserved !== 0) {
-    throw contaminated(productId, 'Inventory aggregate is not 100/0');
+  if (seededOrder === null) {
+    if (inventory.onHand !== 100 || inventory.reserved !== 0) {
+      throw contaminated(productId, 'Inventory aggregate is not 100/0');
+    }
+    if (reservations.length) {
+      throw contaminated(productId, 'inventory reservations already exist');
+    }
+    if (orderLines.length) {
+      throw contaminated(
+        productId,
+        'orders or order-linked history already exists',
+      );
+    }
+    return 'IDEMPOTENT';
   }
-  if (reservations.length) {
-    throw contaminated(productId, 'inventory reservations already exist');
-  }
-  if (orderLines.length) {
+
+  if (
+    inventory.onHand !== 100 - seededOrder.quantity ||
+    inventory.reserved !== 0
+  ) {
     throw contaminated(
       productId,
-      'orders or order-linked history already exists',
+      `Inventory aggregate is not ${100 - seededOrder.quantity}/0 for seeded order history`,
+    );
+  }
+  if (
+    orderLines.length !== 1 ||
+    orderLines[0].id !== seededOrder.lineId ||
+    reservations.length !== 1 ||
+    reservations[0].id !== seededOrder.reservationId ||
+    reservations[0].orderId !== seededOrder.orderId ||
+    reservations[0].status !== 'SHIPPED'
+  ) {
+    throw contaminated(
+      productId,
+      'seeded order history does not match the canonical fixture',
+    );
+  }
+  if (
+    ledger.length !== 3 ||
+    ledger[1].id !== seededOrder.reserveLedgerId ||
+    ledger[2].id !== seededOrder.shipLedgerId ||
+    ledger[1].referenceId !== seededOrder.orderId ||
+    ledger[2].referenceId !== seededOrder.orderId ||
+    ledger[1].type !== 'RESERVE' ||
+    ledger[2].type !== 'SHIP'
+  ) {
+    throw contaminated(
+      productId,
+      'seeded order inventory history does not match the canonical fixture',
     );
   }
   return 'IDEMPOTENT';

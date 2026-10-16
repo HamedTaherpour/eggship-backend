@@ -233,14 +233,12 @@ Never use `prisma db push` for production or staging deployment. Do not invent b
 
 ## Seed policy
 
-There is no seed runner in this repository today. Future seed scripts, if added, must:
-
-- use synthetic development data only;
-- never copy production PII;
-- be deterministic where practical;
-- refuse to run when the target environment is production (or otherwise unidentified).
-
-Production must never accidentally execute development seed scripts.
+The `pnpm db:seed:dev` runner uses synthetic deterministic data only and never
+copies production PII. It refuses non-loopback or non-approved databases. The
+normal target is `/eggship`; isolated verification may use `/eggship_test` only
+with the explicit `EGGSHIP_SEED_TARGET=test` marker and a dedicated test URL.
+Seed reruns are idempotent and do not reset, truncate, or rewrite unrelated
+rows. Production must never accidentally execute development seed scripts.
 
 ## Tests and infrastructure
 

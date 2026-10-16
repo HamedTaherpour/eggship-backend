@@ -11,6 +11,8 @@ import {
   buildAdminProvisioningSpawnOptions,
   buildAuthState,
   buildSyntheticOrderRequest,
+  buildSyntheticStoreProfile,
+  assertSyntheticOrderSnapshot,
   ensureLoadPreparationDirectory,
   parseRetryAfterSeconds,
   redactError,
@@ -71,6 +73,34 @@ describe('k6 fixture preparation safety', () => {
     const second = buildSyntheticOrderRequest('region', 'product', 'key');
     assert.deepEqual(first, second);
     assert.equal(first.lines[0].quantity, 1);
+  });
+
+  it('builds deterministic fictional Iranian StoreProfiles', () => {
+    const first = buildSyntheticStoreProfile(0);
+    assert.deepEqual(first, buildSyntheticStoreProfile(0));
+    assert.match(first.storeName, /تهران/u);
+    assert.ok(first.latitude >= -90 && first.latitude <= 90);
+    assert.ok(first.longitude >= -180 && first.longitude <= 180);
+    assert.throws(() => buildSyntheticStoreProfile(5), /outside/u);
+  });
+
+  it('rejects a synthetic order snapshot that does not match its profile', () => {
+    const profile = buildSyntheticStoreProfile(0);
+    const snapshot = {
+      deliveryStoreName: profile.storeName,
+      deliveryAddress: profile.address,
+      deliveryLatitude: profile.latitude,
+      deliveryLongitude: profile.longitude,
+    };
+    assert.doesNotThrow(() => assertSyntheticOrderSnapshot(snapshot, profile));
+    assert.throws(
+      () =>
+        assertSyntheticOrderSnapshot(
+          { ...snapshot, deliveryStoreName: 'other' },
+          profile,
+        ),
+      /snapshot/u,
+    );
   });
 
   it('keeps provisioning arguments shell-free and explicit', () => {

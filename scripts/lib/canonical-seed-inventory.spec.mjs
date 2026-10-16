@@ -7,6 +7,11 @@ import {
 
 const PRODUCT = '00000000-0000-4000-8000-000000000201';
 const RECEIVE = '00000000-0000-4000-8000-000000000301';
+const ORDER = '00000000-0000-4000-8000-000000000601';
+const LINE = '00000000-0000-4000-8000-000000000701';
+const RESERVATION = '00000000-0000-4000-8000-000000000801';
+const RESERVE = '00000000-0000-4000-8000-000000000901';
+const SHIP = '00000000-0000-4000-8000-000000000902';
 const canonical = {
   id: RECEIVE,
   ...CANONICAL_SEED_RECEIVE,
@@ -52,5 +57,32 @@ describe('canonical development seed inventory guard', () => {
   it('describes a reconciliation-valid canonical ledger transition', () => {
     assert.equal(canonical.onHandAfter, 0 + canonical.onHandDelta);
     assert.equal(canonical.reservedAfter, 0 + canonical.reservedDelta);
+  });
+  it('allows the exact seeded delivered-order history to rerun', () => {
+    assert.equal(
+      assertCanonicalSeedInventoryState(
+        input({
+          inventory: { onHand: 99, reserved: 0 },
+          ledger: [
+            canonical,
+            { id: RESERVE, type: 'RESERVE', referenceId: ORDER },
+            { id: SHIP, type: 'SHIP', referenceId: ORDER },
+          ],
+          reservations: [
+            { id: RESERVATION, orderId: ORDER, status: 'SHIPPED' },
+          ],
+          orderLines: [{ id: LINE }],
+          seededOrder: {
+            orderId: ORDER,
+            lineId: LINE,
+            reservationId: RESERVATION,
+            reserveLedgerId: RESERVE,
+            shipLedgerId: SHIP,
+            quantity: 1,
+          },
+        }),
+      ),
+      'IDEMPOTENT',
+    );
   });
 });
