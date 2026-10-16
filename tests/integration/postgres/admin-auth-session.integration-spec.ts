@@ -328,7 +328,10 @@ describe('Admin auth sessions (integration)', () => {
     ).toBeNull();
     expect(
       await prisma.auditLog.count({
-        where: { action: 'admin.auth.sessions.revoked_all' },
+        where: {
+          action: 'admin.auth.sessions.revoked_all',
+          entityId: seeded.adminId,
+        },
       }),
     ).toBe(0);
     jest.restoreAllMocks();
@@ -402,7 +405,10 @@ describe('Admin auth sessions (integration)', () => {
     expect(stored?.revokedAt).toBeNull();
     expect(
       await prisma.auditLog.count({
-        where: { action: 'admin.auth.refresh.reuse_detected' },
+        where: {
+          action: 'admin.auth.refresh.reuse_detected',
+          entityId: seeded.adminId,
+        },
       }),
     ).toBe(0);
   });
@@ -502,7 +508,10 @@ describe('Admin auth sessions (integration)', () => {
     ).toBeNull();
     expect(
       await prisma.auditLog.count({
-        where: { action: 'admin.auth.refresh.reuse_detected' },
+        where: {
+          action: 'admin.auth.refresh.reuse_detected',
+          entityId: seeded.adminId,
+        },
       }),
     ).toBe(0);
     jest.restoreAllMocks();

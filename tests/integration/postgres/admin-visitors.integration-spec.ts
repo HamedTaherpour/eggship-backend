@@ -41,7 +41,7 @@ describe('Admin visitor/referral reads (integration, REF-04)', () => {
       name: `Referral operator ${randomUUID()}`,
     });
     const user = await users.create({
-      phone: `+98917${String(phoneCounter++).padStart(6, '0')}`,
+      phone: `+98917${String(phoneCounter++).padStart(7, '0')}`,
     });
     await visitors.createAttribution({
       userId: user.id,

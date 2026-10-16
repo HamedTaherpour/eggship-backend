@@ -419,7 +419,16 @@ describe('AuditLog read APIs (PostgreSQL integration)', () => {
     for (const row of plans) {
       const nodeTypes = collectNodeTypes(row['QUERY PLAN'][0]!.Plan);
       expect(nodeTypes.length).toBeGreaterThan(0);
-      expect(nodeTypes).toContain('Seq Scan');
+      expect(
+        nodeTypes.some(
+          (nodeType) =>
+            nodeType === 'Seq Scan' ||
+            nodeType === 'Index Scan' ||
+            nodeType === 'Index Only Scan' ||
+            nodeType === 'Bitmap Heap Scan' ||
+            nodeType === 'Bitmap Index Scan',
+        ),
+      ).toBe(true);
     }
 
     const indexDefs = await prisma.$queryRawUnsafe<

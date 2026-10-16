@@ -14,6 +14,10 @@ import type {
 } from '../src/common/authz/admin-role-resolver';
 import { ADMIN_ROLE_RESOLVER } from '../src/common/authz/authorization.tokens';
 import { PrismaService } from '../src/infrastructure/database/prisma/prisma.service';
+import {
+  TRANSACTION_CONTEXT_BRAND,
+  TransactionRunner,
+} from '../src/infrastructure/database/transaction';
 import type {
   CategoryListQuery,
   CategoryRecord,
@@ -31,6 +35,7 @@ import type {
 import { normalizeRegionName } from '../src/modules/regions/domain/region-name';
 import { RegionRepository } from '../src/modules/regions/infrastructure/region.repository';
 import { AuthSubjectType } from '../src/modules/auth/domain/subject-type';
+import { AuditLogService } from '../src/modules/audit/application/audit-log.service';
 
 class ConfigurableAdminRoleResolver implements AdminRoleResolver {
   private lookup: AdminAuthorizationLookup = { status: 'unavailable' };
@@ -60,6 +65,17 @@ class ConfigurableAdminRoleResolver implements AdminRoleResolver {
     this.lookup = { status: 'unavailable' };
   }
 }
+
+const passThroughTransactions: Pick<
+  TransactionRunner,
+  'run' | 'runIn' | 'runSnapshotRead' | 'runRepeatableRead'
+> = {
+  run: (fn) => fn({ [TRANSACTION_CONTEXT_BRAND]: true }),
+  runIn: (existing, fn) =>
+    fn(existing ?? { [TRANSACTION_CONTEXT_BRAND]: true }),
+  runSnapshotRead: (fn) => fn({ [TRANSACTION_CONTEXT_BRAND]: true }),
+  runRepeatableRead: (fn) => fn({ [TRANSACTION_CONTEXT_BRAND]: true }),
+};
 
 class InMemoryCategoryRepository {
   private readonly rows = new Map<string, CategoryRecord>();
@@ -321,6 +337,10 @@ describe('Category and Region reference APIs (e2e)', () => {
       .useValue(categories)
       .overrideProvider(RegionRepository)
       .useValue(regions)
+      .overrideProvider(TransactionRunner)
+      .useValue(passThroughTransactions)
+      .overrideProvider(AuditLogService)
+      .useValue({ append: jest.fn().mockResolvedValue(undefined) })
       .overrideProvider(ADMIN_ROLE_RESOLVER)
       .useValue(admins)
       .compile();
@@ -388,7 +408,7 @@ describe('Category and Region reference APIs (e2e)', () => {
       .get('/api/v1/categories')
       .query({ page: 1 })
       .expect(400);
-    expect(asApiErrorBody(rejected.body).error.code).toBe('BAD_REQUEST');
+    expect(asApiErrorBody(rejected.body).error.code).toBe('VALIDATION_ERROR');
   });
 
   it('public region list hides inactive regions', async () => {
@@ -514,7 +534,7 @@ describe('Category and Region reference APIs (e2e)', () => {
       .query({ unknown: 'x' })
       .set('Authorization', `Bearer ${token}`)
       .expect(400);
-    expect(asApiErrorBody(rejected.body).error.code).toBe('BAD_REQUEST');
+    expect(asApiErrorBody(rejected.body).error.code).toBe('VALIDATION_ERROR');
   });
 
   it('CATALOG_READ roles can list categories and regions but cannot manage them', async () => {
@@ -585,7 +605,7 @@ describe('Category and Region reference APIs (e2e)', () => {
       .query({ unknown: 'x' })
       .set('Authorization', `Bearer ${token}`)
       .expect(400);
-    expect(asApiErrorBody(rejected.body).error.code).toBe('BAD_REQUEST');
+    expect(asApiErrorBody(rejected.body).error.code).toBe('VALIDATION_ERROR');
   });
 
   it('admin region create/update and OpenAPI document the new operations', async () => {

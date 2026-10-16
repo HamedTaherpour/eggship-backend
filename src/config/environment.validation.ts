@@ -45,6 +45,13 @@ export const DEFAULT_OTP_PHONE_WINDOW_LIMIT = 5;
 export const DEFAULT_OTP_IP_WINDOW_SECONDS = 3_600;
 export const DEFAULT_OTP_IP_WINDOW_LIMIT = 20;
 
+/** Relaxed OTP defaults for explicitly opted-in loopback development only. */
+export const DEFAULT_LOCAL_OTP_RESEND_COOLDOWN_SECONDS = 2;
+export const DEFAULT_LOCAL_OTP_PHONE_WINDOW_SECONDS = 300;
+export const DEFAULT_LOCAL_OTP_PHONE_WINDOW_LIMIT = 20;
+export const DEFAULT_LOCAL_OTP_IP_WINDOW_SECONDS = 300;
+export const DEFAULT_LOCAL_OTP_IP_WINDOW_LIMIT = 100;
+
 /** Default verification-grant TTL after successful OTP verify (10 minutes). */
 export const DEFAULT_OTP_VERIFICATION_GRANT_TTL_SECONDS = 600;
 
@@ -86,6 +93,7 @@ export type StorageProviderName = (typeof STORAGE_PROVIDER_VALUES)[number];
 
 export interface EnvironmentVariables {
   NODE_ENV: NodeEnvironment;
+  EGGSHIP_LOCAL_DEVELOPMENT: boolean;
   PORT: number;
   DATABASE_URL: string;
   DATABASE_POOL_MAX: number;
@@ -183,6 +191,12 @@ export function validateEnvironment(
   if (redisUrl !== undefined && !isRedisUrl(redisUrl)) {
     throw new Error('REDIS_URL must use the redis:// or rediss:// protocol.');
   }
+  const localDevelopment = resolveLocalDevelopment(
+    values,
+    nodeEnv,
+    databaseUrl,
+    redisUrl,
+  );
 
   const openApiEnabled = optionalBoolean(values, 'OPENAPI_ENABLED');
   const appVersion = requiredString(values, 'APP_VERSION');
@@ -259,7 +273,9 @@ export function validateEnvironment(
   const otpCooldown = parsePositiveIntSeconds(
     values,
     'OTP_RESEND_COOLDOWN_SECONDS',
-    DEFAULT_OTP_RESEND_COOLDOWN_SECONDS,
+    localDevelopment
+      ? DEFAULT_LOCAL_OTP_RESEND_COOLDOWN_SECONDS
+      : DEFAULT_OTP_RESEND_COOLDOWN_SECONDS,
   );
   if (otpCooldown > MAX_OTP_RESEND_COOLDOWN_SECONDS) {
     throw new Error(
@@ -270,23 +286,40 @@ export function validateEnvironment(
   const phoneWindowSeconds = parsePositiveIntSeconds(
     values,
     'OTP_PHONE_WINDOW_SECONDS',
-    DEFAULT_OTP_PHONE_WINDOW_SECONDS,
+    localDevelopment
+      ? DEFAULT_LOCAL_OTP_PHONE_WINDOW_SECONDS
+      : DEFAULT_OTP_PHONE_WINDOW_SECONDS,
   );
   const phoneWindowLimit = parsePositiveIntSeconds(
     values,
     'OTP_PHONE_WINDOW_LIMIT',
-    DEFAULT_OTP_PHONE_WINDOW_LIMIT,
+    localDevelopment
+      ? DEFAULT_LOCAL_OTP_PHONE_WINDOW_LIMIT
+      : DEFAULT_OTP_PHONE_WINDOW_LIMIT,
   );
   const ipWindowSeconds = parsePositiveIntSeconds(
     values,
     'OTP_IP_WINDOW_SECONDS',
-    DEFAULT_OTP_IP_WINDOW_SECONDS,
+    localDevelopment
+      ? DEFAULT_LOCAL_OTP_IP_WINDOW_SECONDS
+      : DEFAULT_OTP_IP_WINDOW_SECONDS,
   );
   const ipWindowLimit = parsePositiveIntSeconds(
     values,
     'OTP_IP_WINDOW_LIMIT',
-    DEFAULT_OTP_IP_WINDOW_LIMIT,
+    localDevelopment
+      ? DEFAULT_LOCAL_OTP_IP_WINDOW_LIMIT
+      : DEFAULT_OTP_IP_WINDOW_LIMIT,
   );
+  assertOtpRateLimitSafety({
+    nodeEnv,
+    localDevelopment,
+    cooldownSeconds: otpCooldown,
+    phoneWindowSeconds,
+    phoneWindowLimit,
+    ipWindowSeconds,
+    ipWindowLimit,
+  });
   assertWindowBounds('OTP_PHONE_WINDOW_SECONDS', phoneWindowSeconds);
   assertWindowBounds('OTP_PHONE_WINDOW_LIMIT', phoneWindowLimit, true);
   assertWindowBounds('OTP_IP_WINDOW_SECONDS', ipWindowSeconds);
@@ -379,6 +412,7 @@ export function validateEnvironment(
 
   return {
     NODE_ENV: nodeEnv,
+    EGGSHIP_LOCAL_DEVELOPMENT: localDevelopment,
     PORT: port,
     DATABASE_URL: databaseUrl,
     DATABASE_POOL_MAX: databasePoolMax,
@@ -466,6 +500,75 @@ function resolveOtpProvider(
   }
 
   return provider;
+}
+
+function resolveLocalDevelopment(
+  values: Record<string, unknown>,
+  nodeEnv: NodeEnvironment,
+  databaseUrl: string,
+  redisUrl: string | undefined,
+): boolean {
+  const requested =
+    optionalBoolean(values, 'EGGSHIP_LOCAL_DEVELOPMENT') ?? false;
+  if (!requested) {
+    return false;
+  }
+  if (nodeEnv !== 'development') {
+    throw new Error(
+      'EGGSHIP_LOCAL_DEVELOPMENT=true requires NODE_ENV=development.',
+    );
+  }
+  if (!isLoopbackUrl(databaseUrl, ['postgres:', 'postgresql:'])) {
+    throw new Error(
+      'EGGSHIP_LOCAL_DEVELOPMENT=true requires a loopback PostgreSQL DATABASE_URL.',
+    );
+  }
+  if (
+    redisUrl === undefined ||
+    !isLoopbackUrl(redisUrl, ['redis:', 'rediss:'])
+  ) {
+    throw new Error(
+      'EGGSHIP_LOCAL_DEVELOPMENT=true requires a loopback REDIS_URL.',
+    );
+  }
+  return true;
+}
+
+function isLoopbackUrl(raw: string, protocols: readonly string[]): boolean {
+  try {
+    const url = new URL(raw);
+    return (
+      protocols.includes(url.protocol) &&
+      ['127.0.0.1', 'localhost', '::1'].includes(url.hostname.toLowerCase())
+    );
+  } catch {
+    return false;
+  }
+}
+
+function assertOtpRateLimitSafety(input: {
+  nodeEnv: NodeEnvironment;
+  localDevelopment: boolean;
+  cooldownSeconds: number;
+  phoneWindowSeconds: number;
+  phoneWindowLimit: number;
+  ipWindowSeconds: number;
+  ipWindowLimit: number;
+}): void {
+  if (input.nodeEnv === 'test' || input.localDevelopment) {
+    return;
+  }
+  if (
+    input.cooldownSeconds < DEFAULT_OTP_RESEND_COOLDOWN_SECONDS ||
+    input.phoneWindowSeconds < DEFAULT_OTP_PHONE_WINDOW_SECONDS ||
+    input.phoneWindowLimit > DEFAULT_OTP_PHONE_WINDOW_LIMIT ||
+    input.ipWindowSeconds < DEFAULT_OTP_IP_WINDOW_SECONDS ||
+    input.ipWindowLimit > DEFAULT_OTP_IP_WINDOW_LIMIT
+  ) {
+    throw new Error(
+      'Relaxed OTP rate limits require EGGSHIP_LOCAL_DEVELOPMENT=true with loopback PostgreSQL and Redis.',
+    );
+  }
 }
 
 function parseOtpProvider(value: string): OtpProviderName {
@@ -747,7 +850,10 @@ function optionalString(
 
 function optionalBoolean(
   values: Record<string, unknown>,
-  name: 'OPENAPI_ENABLED' | 'STORAGE_FORCE_PATH_STYLE',
+  name:
+    | 'EGGSHIP_LOCAL_DEVELOPMENT'
+    | 'OPENAPI_ENABLED'
+    | 'STORAGE_FORCE_PATH_STYLE',
 ): boolean | undefined {
   const value = values[name];
   if (value === undefined || value === null) {

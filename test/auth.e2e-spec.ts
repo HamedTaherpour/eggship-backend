@@ -23,6 +23,7 @@ import type {
   UserRecord,
 } from '../src/modules/users/domain/user';
 import { UserRepository } from '../src/modules/users/infrastructure/user.repository';
+import { PushInstallationRepository } from '../src/modules/notifications/infrastructure/push-installation.repository';
 import {
   bootstrapBrowserCsrf,
   browserRequest,
@@ -249,6 +250,11 @@ describe('auth session lifecycle (e2e)', () => {
       .useValue(users)
       .overrideProvider(AuthSessionRepository)
       .useValue(sessions)
+      .overrideProvider(PushInstallationRepository)
+      .useValue({
+        revokeAll: jest.fn().mockResolvedValue(0),
+        revokeAllOwned: jest.fn().mockResolvedValue(0),
+      })
       .compile();
 
     app = moduleRef.createNestApplication();

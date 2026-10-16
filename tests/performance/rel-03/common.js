@@ -15,8 +15,12 @@ export const options = {
 
 export const submissions = new Counter('order_submissions');
 export const successfulOrders = new Counter('successful_orders');
+export const rejectedOrders = new Counter('rejected_orders');
 export const expectedRejections = new Counter('expected_business_rejections');
 export const unexpectedFailures = new Counter('unexpected_failures');
+export const unexpectedFailureSignatures = new Counter(
+  'unexpected_failure_signatures',
+);
 export const successfulOperations = new Counter('successful_operations');
 export const expectedBusinessRejectionCodes = Object.fromEntries(
   Object.entries(rejectionMetricCodes).map(([code, metricName]) => [
@@ -61,6 +65,7 @@ export function recordStatus(response) {
 export function record(
   response,
   predicate = (status) => status >= 200 && status < 300,
+  endpoint = 'unknown',
 ) {
   recordStatus(response);
   const ok = check(response, {
@@ -69,7 +74,21 @@ export function record(
       String(r.headers['Content-Type'] || '').includes('application/json'),
   });
   if (ok) successfulOperations.add(1);
-  if (!ok) unexpectedFailures.add(1);
+  if (!ok) {
+    unexpectedFailures.add(1);
+    let code = 'NO_ERROR_CODE';
+    try {
+      const body = response.json();
+      if (typeof body?.error?.code === 'string') code = body.error.code;
+    } catch {
+      // The status and endpoint remain useful when the body is not JSON.
+    }
+    unexpectedFailureSignatures.add(1, {
+      endpoint,
+      status: String(response.status),
+      code,
+    });
+  }
   return ok;
 }
 export function handleSummary(data) {

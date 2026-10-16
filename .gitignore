@@ -8,13 +8,16 @@ coverage/
 src/generated/prisma/
 
 # Generated artifacts
-artifacts/openapi.json
-artifacts/load-tests/
+# Keep only the directory policy README under version control. Test, OpenAPI,
+# and local verification output is regenerated on demand.
+artifacts/*
+!artifacts/README.md
 
 # Environment and secrets
 .env
 .env.*
 !.env.example
+.local/
 
 # Logs
 *.log

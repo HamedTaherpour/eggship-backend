@@ -16,6 +16,7 @@ const scenarios = {
     file: 'orders.js',
     vus: 5,
     duration: '30s',
+    execution: { type: 'shared-iterations', iterations: 50 },
     required: [
       'LOAD_TEST_USER_TOKENS',
       'LOAD_TEST_PRODUCT_IDS',
@@ -126,12 +127,8 @@ export function buildK6Environment(config, source = process.env) {
 export function buildK6Arguments(config, script) {
   const gitSha = config.GIT_SHA ?? config.gitSha ?? 'unknown';
   const appVersion = config.APP_VERSION ?? config.appVersion ?? 'unknown';
-  return [
+  const args = [
     'run',
-    '--vus',
-    String(config.vus),
-    '--duration',
-    config.duration,
     '--include-system-env-vars',
     '-e',
     `LOAD_TEST_BASE_URL=${config.baseUrl}`,
@@ -151,6 +148,16 @@ export function buildK6Arguments(config, script) {
     `APP_VERSION=${appVersion}`,
     script,
   ];
+  if (!config.execution)
+    args.splice(
+      1,
+      0,
+      '--vus',
+      String(config.vus),
+      '--duration',
+      config.duration,
+    );
+  return args;
 }
 
 export function main(args = process.argv.slice(2)) {

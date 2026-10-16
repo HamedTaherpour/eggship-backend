@@ -10,6 +10,7 @@
 import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { createPnpmProcess } from './lib/pnpm-process.mjs';
 
 const root = process.cwd();
 const suite = parseSuite(process.argv);
@@ -39,11 +40,11 @@ const jestArgs = [
   '--runInBand',
 ];
 
-const result = spawnSync('pnpm', jestArgs, {
+const pnpm = createPnpmProcess(jestArgs);
+const result = spawnSync(pnpm.command, pnpm.args, {
   cwd: root,
   env,
   stdio: 'inherit',
-  shell: process.platform === 'win32',
 });
 
 process.exit(result.status === null ? 1 : result.status);
@@ -280,11 +281,11 @@ function runMigrations(env) {
     // Integration runs do not need CLI telemetry and must be deterministic.
     CHECKPOINT_DISABLE: '1',
   };
-  const result = spawnSync('pnpm', ['prisma:migrate:deploy'], {
+  const pnpm = createPnpmProcess(['prisma:migrate:deploy']);
+  const result = spawnSync(pnpm.command, pnpm.args, {
     cwd: root,
     env: migrateEnv,
     stdio: 'inherit',
-    shell: process.platform === 'win32',
   });
   if (result.status !== 0) {
     fail(

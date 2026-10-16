@@ -16,6 +16,7 @@ describe('validateEnvironment', () => {
   it('returns normalized typed configuration for valid input', () => {
     expect(validateEnvironment(validEnvironment)).toEqual({
       NODE_ENV: 'test',
+      EGGSHIP_LOCAL_DEVELOPMENT: false,
       PORT: 3000,
       DATABASE_URL: 'postgresql://example.invalid/eggship',
       DATABASE_POOL_MAX: 10,
@@ -53,6 +54,57 @@ describe('validateEnvironment', () => {
       SENSITIVE_ADMIN_MIN_TTL_SECONDS: 60,
       SENSITIVE_ADMIN_MAX_TTL_SECONDS: 900,
     });
+  });
+
+  it('uses relaxed OTP defaults only for explicit loopback development', () => {
+    expect(
+      validateEnvironment({
+        ...validEnvironment,
+        NODE_ENV: 'development',
+        DATABASE_URL: 'postgresql://localhost:5432/eggship',
+        REDIS_URL: 'redis://127.0.0.1:6379/0',
+        EGGSHIP_LOCAL_DEVELOPMENT: 'true',
+      }),
+    ).toMatchObject({
+      EGGSHIP_LOCAL_DEVELOPMENT: true,
+      OTP_RESEND_COOLDOWN_SECONDS: 2,
+      OTP_PHONE_WINDOW_SECONDS: 300,
+      OTP_PHONE_WINDOW_LIMIT: 20,
+      OTP_IP_WINDOW_SECONDS: 300,
+      OTP_IP_WINDOW_LIMIT: 100,
+    });
+  });
+
+  it('protects production and non-loopback development from relaxed OTP limits', () => {
+    expect(() =>
+      validateEnvironment({
+        ...validEnvironment,
+        NODE_ENV: 'production',
+        EGGSHIP_LOCAL_DEVELOPMENT: 'true',
+      }),
+    ).toThrow('requires NODE_ENV=development');
+
+    expect(() =>
+      validateEnvironment({
+        ...validEnvironment,
+        NODE_ENV: 'development',
+        DATABASE_URL: 'postgresql://dev.example.invalid/eggship',
+        REDIS_URL: 'redis://127.0.0.1:6379/0',
+        EGGSHIP_LOCAL_DEVELOPMENT: 'true',
+      }),
+    ).toThrow('loopback PostgreSQL');
+
+    expect(() =>
+      validateEnvironment({
+        ...validEnvironment,
+        NODE_ENV: 'production',
+        OTP_RESEND_COOLDOWN_SECONDS: '2',
+        OTP_PHONE_WINDOW_SECONDS: '300',
+        OTP_PHONE_WINDOW_LIMIT: '20',
+        OTP_IP_WINDOW_SECONDS: '300',
+        OTP_IP_WINDOW_LIMIT: '100',
+      }),
+    ).toThrow('Relaxed OTP rate limits require');
   });
 
   it('validates signed-read TTL ordering and positive integer syntax', () => {

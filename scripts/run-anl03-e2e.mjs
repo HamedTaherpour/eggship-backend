@@ -3,6 +3,7 @@
 
 import { readFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
+import { createPnpmProcess } from './lib/pnpm-process.mjs';
 
 const values = parseEnv(readFileSync('.env', 'utf8'));
 const env = { ...process.env };
@@ -25,11 +26,14 @@ if (runtime && target(runtime) === target(env.TEST_DATABASE_URL)) {
   );
 }
 env.INTEGRATION_SUITE = 'postgres';
-const result = spawnSync(
-  'pnpm',
-  ['exec', 'jest', '--config', 'test/jest-anl03-e2e.config.ts', '--runInBand'],
-  { env, stdio: 'inherit', shell: process.platform === 'win32' },
-);
+const pnpm = createPnpmProcess([
+  'exec',
+  'jest',
+  '--config',
+  'test/jest-anl03-e2e.config.ts',
+  '--runInBand',
+]);
+const result = spawnSync(pnpm.command, pnpm.args, { env, stdio: 'inherit' });
 process.exit(result.status ?? 1);
 
 function parseEnv(text) {

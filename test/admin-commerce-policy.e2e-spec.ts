@@ -14,6 +14,10 @@ import type {
 import { ADMIN_ROLE_RESOLVER } from '../src/common/authz/authorization.tokens';
 import { createOpenApiDocument } from '../src/common/openapi/openapi.document';
 import { PrismaService } from '../src/infrastructure/database/prisma/prisma.service';
+import {
+  TRANSACTION_CONTEXT_BRAND,
+  TransactionRunner,
+} from '../src/infrastructure/database/transaction';
 import { AuthSubjectType } from '../src/modules/auth/domain/subject-type';
 import {
   CommerceOverrideMode,
@@ -32,6 +36,7 @@ import {
   type OverrideMutationResult,
   type PolicyMutationResult,
 } from '../src/modules/commerce-policy/infrastructure/commerce-policy.repository';
+import { AuditLogService } from '../src/modules/audit/application/audit-log.service';
 
 class RoleResolver implements AdminRoleResolver {
   role: string = AdminRole.SUPER_ADMIN;
@@ -177,6 +182,17 @@ class InMemoryCommerceRepository {
   }
 }
 
+const passThroughTransactions: Pick<
+  TransactionRunner,
+  'run' | 'runIn' | 'runSnapshotRead' | 'runRepeatableRead'
+> = {
+  run: (fn) => fn({ [TRANSACTION_CONTEXT_BRAND]: true }),
+  runIn: (existing, fn) =>
+    fn(existing ?? { [TRANSACTION_CONTEXT_BRAND]: true }),
+  runSnapshotRead: (fn) => fn({ [TRANSACTION_CONTEXT_BRAND]: true }),
+  runRepeatableRead: (fn) => fn({ [TRANSACTION_CONTEXT_BRAND]: true }),
+};
+
 function token(subjectType: string, subjectId = randomUUID()): string {
   return jwt.sign(
     {
@@ -210,8 +226,12 @@ describe('Admin commerce policy API (e2e)', () => {
       })
       .overrideProvider(CommercePolicyRepository)
       .useValue(repository)
+      .overrideProvider(TransactionRunner)
+      .useValue(passThroughTransactions)
       .overrideProvider(ADMIN_ROLE_RESOLVER)
       .useValue(roles)
+      .overrideProvider(AuditLogService)
+      .useValue({ append: jest.fn().mockResolvedValue(undefined) })
       .compile();
     app = moduleRef.createNestApplication();
     configureApplication(app);

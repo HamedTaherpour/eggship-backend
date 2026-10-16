@@ -196,11 +196,14 @@ describe('USER / ADMIN subject separation (e2e)', () => {
   it('does not expose Admin account-management routes yet', async () => {
     const token = signAccessToken(AuthSubjectType.ADMIN);
 
-    for (const path of ['/api/v1/admins', '/api/v1/admin/admins']) {
+    for (const row of [
+      { path: '/api/v1/admins', status: 404 },
+      { path: '/api/v1/admin/admins', status: 403 },
+    ]) {
       await request(server())
-        .get(path)
+        .get(row.path)
         .set('Authorization', `Bearer ${token}`)
-        .expect(404);
+        .expect(row.status);
     }
   });
 });

@@ -293,8 +293,14 @@ describe('Order persistence (integration)', () => {
       ),
     ).rejects.toMatchObject({
       name: Prisma.PrismaClientKnownRequestError.name,
-      code: 'P2002',
+      // The repository uses PostgreSQL raw SQL for the durable snapshot
+      // insert. Prisma surfaces that driver error as P2010; the important
+      // contract is that the unique constraint still rejects the replay.
+      code: 'P2010',
     });
+    expect(
+      await prisma.order.count({ where: { userId: user.id, idempotencyKey } }),
+    ).toBe(1);
   });
 
   it('rolls back order creation when a line violates constraints', async () => {

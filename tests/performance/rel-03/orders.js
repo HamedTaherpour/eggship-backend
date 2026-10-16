@@ -9,13 +9,30 @@ import {
   pick,
   submissions,
   successfulOrders,
+  rejectedOrders,
   expectedRejections,
   unexpectedFailures,
   recordStatus,
   successfulOperations,
   recordExpectedBusinessRejection,
 } from './common.js';
-export { handleSummary, options } from './common.js';
+import { handleSummary } from './common.js';
+export { handleSummary };
+
+const ORDER_ATTEMPT_LIMIT = 50;
+
+// shared-iterations applies the iteration count globally across all VUs.
+export const options = {
+  scenarios: {
+    order_creation: {
+      executor: 'shared-iterations',
+      vus: 5,
+      iterations: ORDER_ATTEMPT_LIMIT,
+      maxDuration: '30s',
+    },
+  },
+  summaryTrendStats: ['med', 'p(90)', 'p(95)', 'p(99)', 'max'],
+};
 export default function () {
   const token = pick(users());
   const key = `00000000-0000-4000-8000-${String(__VU).padStart(6, '0')}${String(__ITER).padStart(6, '0')}`;
@@ -43,11 +60,15 @@ export default function () {
     response.status === 409 ||
     response.status === 422 ||
     response.status === 503;
+  const successful = response.status === 201 || response.status === 200;
   if (businessReject && body.error) expectedRejections.add(1);
-  else if (response.status === 201 || response.status === 200) {
+  if (successful) {
     successfulOrders.add(1);
     successfulOperations.add(1);
-  } else unexpectedFailures.add(1);
+  } else {
+    rejectedOrders.add(1);
+    if (!(businessReject && body.error)) unexpectedFailures.add(1);
+  }
   if (businessReject && body.error) recordExpectedBusinessRejection(response);
   check(response, {
     'order response is classified': () =>

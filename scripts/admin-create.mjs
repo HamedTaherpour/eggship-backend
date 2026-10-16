@@ -13,6 +13,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { createInterface } from 'node:readline';
 import { join } from 'node:path';
 import { stdin as stdinStream, stderr } from 'node:process';
+import { createPnpmProcess } from './lib/pnpm-process.mjs';
 
 const root = process.cwd();
 
@@ -195,14 +196,19 @@ async function main() {
   const entry = join(root, 'dist', 'cli', 'create-admin.js');
   const compiled = existsSync(entry);
   const command = compiled
-    ? ['node', entry]
-    : ['pnpm', 'exec', 'nest', 'start', '--entryFile', 'cli/create-admin'];
+    ? { command: process.execPath, args: [entry] }
+    : createPnpmProcess([
+        'exec',
+        'nest',
+        'start',
+        '--entryFile',
+        'cli/create-admin',
+      ]);
 
-  const result = spawnSync(command[0], command.slice(1), {
+  const result = spawnSync(command.command, command.args, {
     cwd: root,
     env,
     stdio: 'inherit',
-    shell: process.platform === 'win32',
   });
 
   if (result.status !== 0) {

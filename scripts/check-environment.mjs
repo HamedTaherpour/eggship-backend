@@ -10,6 +10,7 @@
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { createPnpmProcess } from './lib/pnpm-process.mjs';
 
 const root = process.cwd();
 const errors = [];
@@ -157,32 +158,14 @@ if (!satisfiesNodeRange(process.version, engines.node)) {
 }
 
 let pnpmVersion = null;
-const pnpmCandidates =
-  process.platform === 'win32' ? ['pnpm.cmd', 'pnpm.exe', 'pnpm'] : ['pnpm'];
-
-for (const candidate of pnpmCandidates) {
-  try {
-    pnpmVersion = execFileSync(candidate, ['--version'], {
-      cwd: root,
-      encoding: 'utf8',
-      shell: process.platform === 'win32',
-    }).trim();
-    break;
-  } catch {
-    // try next candidate
-  }
-}
-
-if (pnpmVersion === null) {
-  try {
-    pnpmVersion = execFileSync('corepack', ['pnpm', '--version'], {
-      cwd: root,
-      encoding: 'utf8',
-      shell: process.platform === 'win32',
-    }).trim();
-  } catch {
-    errors.push('pnpm is not available on PATH.');
-  }
+try {
+  const pnpm = createPnpmProcess(['--version']);
+  pnpmVersion = execFileSync(pnpm.command, pnpm.args, {
+    cwd: root,
+    encoding: 'utf8',
+  }).trim();
+} catch {
+  errors.push('pnpm is not available on PATH.');
 }
 
 if (pnpmVersion !== null) {

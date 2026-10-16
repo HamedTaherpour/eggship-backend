@@ -20,6 +20,7 @@ describe('REL-03 reporting', () => {
           iterations: metric(4),
           order_submissions: metric(4),
           successful_orders: metric(3),
+          rejected_orders: metric(1),
           successful_operations: metric(3),
           expected_business_rejections: metric(1),
           unexpected_failures: metric(0),
@@ -41,10 +42,33 @@ describe('REL-03 reporting', () => {
     assert.equal(result.verdict, 'PASS');
     assert.equal(result.baseUrl, 'http://127.0.0.1:3000');
     assert.equal(result.expectedBusinessRejections.ORDERING_CLOSED, 1);
+    assert.equal(result.attemptedOrders, 4);
+    assert.equal(result.successfulOrders, 3);
+    assert.equal(result.rejectedOrders, 1);
     assert.match(result.markdown, /Successful operations: 3/);
+    assert.match(result.markdown, /Attempted orders: 4/);
   });
   it('sanitizes localhost', () => {
     assert.equal(safeBaseUrl('http://localhost'), 'http://localhost');
+  });
+  it('retains endpoint, status, and stable error code for unexpected failures', () => {
+    const result = buildRel03Summary(
+      {
+        metrics: {
+          http_req_duration: {
+            values: { med: 1, 'p(90)': 2, 'p(95)': 3, 'p(99)': 4, max: 5 },
+          },
+          http_reqs: metric(3),
+          unexpected_failures: metric(1),
+          'unexpected_failure_signatures{endpoint:/api/v1/orders/:id,status:404,code:ORDER_NOT_FOUND}':
+            metric(1),
+        },
+      },
+      { scenario: 'order-reads', duration: '60s' },
+    );
+    assert.deepEqual(result.unexpectedFailureSummary, {
+      '/api/v1/orders/:id': { 404: { ORDER_NOT_FOUND: 1 } },
+    });
   });
   it('preserves a loopback host and explicit port', () => {
     assert.equal(safeBaseUrl('http://127.0.0.1:3000'), 'http://127.0.0.1:3000');

@@ -27,7 +27,33 @@ The guard accepts only `NODE_ENV=development`, PostgreSQL, a loopback host
 fails before connecting for production, staging, test, remote, or unknown
 targets. The command prints product/region IDs, prices, and available stock.
 
-Use the printed values for REL-03. The fixed IDs are also:
+Use `pnpm load:prepare` for the complete authenticated REL-03 fixture workflow
+after the canonical seed is present. It validates these fixed IDs and writes
+the ignored `.local/eggship-k6.env` configuration without printing tokens.
+Preparation checkpoints successful customer/Admin refresh sessions in the
+ignored `.local/eggship-k6-auth.json` file, so interrupted runs reuse valid
+sessions instead of requesting OTPs again. OTP rate-limit responses fail fast
+with the endpoint, stable error code, and `Retry-After` duration; the workflow
+does not bypass or reset the authentication limiter.
+
+For faster local fixture preparation, explicitly opt into the development-only
+OTP defaults before starting the API:
+
+```bash
+export NODE_ENV=development
+export EGGSHIP_LOCAL_DEVELOPMENT=true
+export OTP_RESEND_COOLDOWN_SECONDS=2
+export OTP_PHONE_WINDOW_SECONDS=300
+export OTP_PHONE_WINDOW_LIMIT=20
+export OTP_IP_WINDOW_SECONDS=300
+export OTP_IP_WINDOW_LIMIT=100
+```
+
+The opt-in requires loopback PostgreSQL and Redis targets. Production/staging
+configuration retains the 60-second, 3600-second, 5-request, and 20-request
+defaults. Existing Redis cooldown keys retain their original TTL and expire
+naturally; changing configuration does not delete or rewrite them.
+The fixed IDs are also:
 
 ```bash
 export LOAD_TEST_PRODUCT_IDS=00000000-0000-4000-8000-000000000201,00000000-0000-4000-8000-000000000202,00000000-0000-4000-8000-000000000203

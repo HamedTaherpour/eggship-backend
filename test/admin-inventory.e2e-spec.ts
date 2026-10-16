@@ -14,6 +14,7 @@ import type {
 } from '../src/common/authz/admin-role-resolver';
 import { ADMIN_ROLE_RESOLVER } from '../src/common/authz/authorization.tokens';
 import { PrismaService } from '../src/infrastructure/database/prisma/prisma.service';
+import { AuditLogService } from '../src/modules/audit/application/audit-log.service';
 import {
   TRANSACTION_CONTEXT_BRAND,
   TransactionRunner,
@@ -748,6 +749,8 @@ describe('Admin inventory APIs (e2e)', () => {
       .useValue(priceHistory)
       .overrideProvider(TransactionRunner)
       .useValue(new PassThroughTransactionRunner())
+      .overrideProvider(AuditLogService)
+      .useValue({ append: jest.fn().mockResolvedValue(undefined) })
       .overrideProvider(InventoryBalanceRepository)
       .useValue(balances)
       .overrideProvider(InventoryLedgerRepository)
@@ -949,7 +952,9 @@ describe('Admin inventory APIs (e2e)', () => {
       .set('Idempotency-Key', randomUUID())
       .send({ delta: -1 })
       .expect(400);
-    expect(asApiErrorBody(missingReason.body).error.code).toBe('BAD_REQUEST');
+    expect(asApiErrorBody(missingReason.body).error.code).toBe(
+      'VALIDATION_ERROR',
+    );
 
     const belowReserved = await request(server())
       .post(`/api/v1/admin/inventory/${productId}/adjust`)

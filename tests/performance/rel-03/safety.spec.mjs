@@ -26,6 +26,33 @@ function rejects(overrides, text) {
 }
 
 describe('REL-03 load-test safety', () => {
+  it('uses a global shared-iterations bound for order creation', () => {
+    assert.equal(
+      execFileSync(
+        process.execPath,
+        ['--check', 'tests/performance/rel-03/orders.js'],
+        {
+          encoding: 'utf8',
+        },
+      ),
+      '',
+    );
+    const args = buildK6Arguments(
+      {
+        baseUrl: 'http://127.0.0.1:3000',
+        environment: 'local',
+        name: 'orders',
+        vus: 5,
+        duration: '30s',
+        execution: { type: 'shared-iterations', iterations: 50 },
+        artifactStamp: 'test-stamp',
+      },
+      'tests/performance/rel-03/orders.js',
+    );
+    assert.equal(args.includes('--duration'), false);
+    assert.equal(args.includes('--iterations'), false);
+  });
+
   it('propagates the sanitized base URL to the k6 child environment', () => {
     const environment = buildK6Environment(
       {

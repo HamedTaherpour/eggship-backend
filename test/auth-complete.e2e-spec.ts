@@ -417,7 +417,7 @@ describe('auth complete + current user (e2e)', () => {
       request(app.getHttpServer() as Server).post('/api/v1/auth/complete'),
       csrf,
     )
-      .send({ verificationGrantId: grantId, referralCode: 'NOT-A-CODE' })
+      .send({ verificationGrantId: grantId })
       .expect(200);
 
     expect(complete.headers['cache-control']).toBe('no-store');

@@ -41,6 +41,35 @@ function requiredMetricValue(metric, label, key) {
   return value;
 }
 
+function buildFailureSummary(metrics) {
+  const summary = {};
+  for (const [name, metric] of Object.entries(metrics)) {
+    const match = name.match(/^unexpected_failure_signatures\{([^}]*)\}$/u);
+    const tags = metric?.tags ?? {};
+    if (!match && Object.keys(tags).length === 0) continue;
+    const parsed = match
+      ? Object.fromEntries(
+          match[1].split(',').map((part) => {
+            const separator = part.indexOf(':');
+            return [part.slice(0, separator), part.slice(separator + 1)];
+          }),
+        )
+      : tags;
+    const count = metric?.values?.count;
+    if (
+      !parsed.endpoint ||
+      !parsed.status ||
+      !parsed.code ||
+      !Number.isFinite(count)
+    )
+      continue;
+    summary[parsed.endpoint] ??= {};
+    summary[parsed.endpoint][parsed.status] ??= {};
+    summary[parsed.endpoint][parsed.status][parsed.code] = count;
+  }
+  return summary;
+}
+
 export function safeBaseUrl(raw) {
   try {
     if (typeof raw !== 'string') return 'unavailable';
@@ -122,6 +151,7 @@ export function buildRel03Summary(data, context) {
     appVersion: context.appVersion,
     execution: { vus: context.vus, duration: context.duration },
     submissions: business.submissions,
+    attemptedOrders: business.submissions,
     iterations: business.iterations,
     requests: counts.count || 0,
     throughputRps: durationSeconds ? (counts.count || 0) / durationSeconds : 0,
@@ -139,12 +169,16 @@ export function buildRel03Summary(data, context) {
     },
     successfulOperations: business.successfulOperations,
     successfulOrders: business.successfulOrders,
+    rejectedOrders:
+      count('rejected_orders') ||
+      business.expectedBusinessRejections + business.unexpectedFailures,
     expectedBusinessRejections: expectedBusinessRejections,
     expectedBusinessRejectionCount: business.expectedBusinessRejections,
     unexpectedFailures: business.unexpectedFailures,
+    unexpectedFailureSummary: buildFailureSummary(data.metrics),
     verdict: business.unexpectedFailures === 0 ? 'PASS' : 'FAIL',
   };
-  result.markdown = `# REL-03 ${result.scenario}\n\n- Verdict: **${result.verdict}**\n- Environment: ${result.environment}\n- Base URL: ${result.baseUrl}\n- Timestamp: ${result.timestamp}\n- Execution: ${result.execution.vus} VUs / ${result.execution.duration}\n- Requests: ${result.requests}\n- Successful operations: ${result.successfulOperations}\n- Expected business rejections: ${result.expectedBusinessRejectionCount}\n- Unexpected failures: ${result.unexpectedFailures}\n- Latency ms: median ${result.latencyMs.median}, p90 ${result.latencyMs.p90}, p95 ${result.latencyMs.p95}, p99 ${result.latencyMs.p99}, max ${result.latencyMs.max}\n- Rejection codes: ${JSON.stringify(result.expectedBusinessRejections)}\n\nThese are local/staging harness-correctness results, not capacity or SLA claims.\n`;
+  result.markdown = `# REL-03 ${result.scenario}\n\n- Verdict: **${result.verdict}**\n- Environment: ${result.environment}\n- Base URL: ${result.baseUrl}\n- Timestamp: ${result.timestamp}\n- Execution: ${result.execution.vus} VUs / ${result.execution.duration}\n- Requests: ${result.requests}\n- Successful operations: ${result.successfulOperations}\n- Attempted orders: ${result.attemptedOrders}\n- Successful orders: ${result.successfulOrders}\n- Rejected orders: ${result.rejectedOrders}\n- Unexpected failures: ${result.unexpectedFailures}\n- Latency ms: median ${result.latencyMs.median}, p90 ${result.latencyMs.p90}, p95 ${result.latencyMs.p95}, p99 ${result.latencyMs.p99}, max ${result.latencyMs.max}\n- Rejection codes: ${JSON.stringify(result.expectedBusinessRejections)}\n\nThese are local/staging harness-correctness results, not capacity or SLA claims.\n`;
   return result;
 }
 
