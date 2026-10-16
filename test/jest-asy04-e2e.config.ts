@@ -4,7 +4,9 @@ const config: Config = {
   moduleFileExtensions: ['js', 'json', 'ts'],
   rootDir: '..',
   testEnvironment: 'node',
-  testMatch: ['<rootDir>/test/asy-04.e2e-spec.ts'],
+  testMatch: [
+    '<rootDir>/tests/integration/domain/asy-04-admin-api.integration-spec.ts',
+  ],
   transform: { '^.+\\.ts$': ['ts-jest', { tsconfig: 'tsconfig.json' }] },
   setupFiles: ['<rootDir>/test/setup-asy04-e2e.ts'],
 };

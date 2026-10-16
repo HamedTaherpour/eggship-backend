@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { forwardRef, Inject, Injectable } from '@nestjs/common';
 import { Prisma } from '../../../generated/prisma/client';
 import {
   AuditAction,
@@ -29,7 +29,7 @@ export class AsyncRecoveryService {
     private readonly repository: AsyncRecoveryRepository,
     private readonly audit: AuditLogService,
     private readonly transactions: TransactionRunner,
-    @Inject(RECOVERY_PROCESSORS)
+    @Inject(forwardRef(() => RECOVERY_PROCESSORS))
     private readonly processors: readonly RecoveryProcessor[],
   ) {}
 

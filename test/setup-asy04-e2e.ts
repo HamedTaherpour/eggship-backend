@@ -5,7 +5,7 @@ import {
   resolveIntegrationEnvironment,
 } from '../tests/integration/support/integration-environment';
 
-const suite = 'postgres' as const;
+const suite = 'all' as const;
 
 mergeIntegrationKeysIntoProcessEnv(
   readIntegrationKeysFromEnvFile(process.cwd(), process.env, suite),
