@@ -52,23 +52,87 @@ export class PriceHistoryResponseDto {
 
 export class AnalyticsSalesOverviewDto {
   @ApiProperty() ordersCreated!: number;
-  @ApiProperty() createdOrderValue!: number | string;
+  @ApiProperty({
+    oneOf: [
+      { type: 'integer', format: 'int64' },
+      { type: 'string', pattern: '^[0-9]+$' },
+    ],
+    description:
+      'Integer Toman amount. Values above JavaScript safe-integer range are decimal strings.',
+  })
+  createdOrderValue!: number | string;
   @ApiProperty() ordersConfirmed!: number;
   @ApiProperty() ordersShipped!: number;
   @ApiProperty() ordersDelivered!: number;
   @ApiProperty() ordersCancelled!: number;
-  @ApiProperty() cancelledOrderValue!: number | string;
-  @ApiProperty() grossSales!: number | string;
-  @ApiProperty() lineDiscounts!: number | string;
-  @ApiProperty() orderDiscounts!: number | string;
-  @ApiProperty() totalDiscounts!: number | string;
-  @ApiProperty() netSales!: number | string;
+  @ApiProperty({
+    oneOf: [
+      { type: 'integer', format: 'int64' },
+      { type: 'string', pattern: '^[0-9]+$' },
+    ],
+    description:
+      'Integer Toman amount. Values above JavaScript safe-integer range are decimal strings.',
+  })
+  cancelledOrderValue!: number | string;
+  @ApiProperty({
+    oneOf: [
+      { type: 'integer', format: 'int64' },
+      { type: 'string', pattern: '^[0-9]+$' },
+    ],
+    description:
+      'Integer Toman amount. Values above JavaScript safe-integer range are decimal strings.',
+  })
+  grossSales!: number | string;
+  @ApiProperty({
+    oneOf: [
+      { type: 'integer', format: 'int64' },
+      { type: 'string', pattern: '^[0-9]+$' },
+    ],
+    description:
+      'Integer Toman amount. Values above JavaScript safe-integer range are decimal strings.',
+  })
+  lineDiscounts!: number | string;
+  @ApiProperty({
+    oneOf: [
+      { type: 'integer', format: 'int64' },
+      { type: 'string', pattern: '^[0-9]+$' },
+    ],
+    description:
+      'Integer Toman amount. Values above JavaScript safe-integer range are decimal strings.',
+  })
+  orderDiscounts!: number | string;
+  @ApiProperty({
+    oneOf: [
+      { type: 'integer', format: 'int64' },
+      { type: 'string', pattern: '^[0-9]+$' },
+    ],
+    description:
+      'Integer Toman amount. Values above JavaScript safe-integer range are decimal strings.',
+  })
+  totalDiscounts!: number | string;
+  @ApiProperty({
+    oneOf: [
+      { type: 'integer', format: 'int64' },
+      { type: 'string', pattern: '^[0-9]+$' },
+    ],
+    description:
+      'Integer Toman amount. Values above JavaScript safe-integer range are decimal strings.',
+  })
+  netSales!: number | string;
 }
 
 export class AnalyticsTopProductDto {
   @ApiProperty({ format: 'uuid' }) productId!: string;
   @ApiProperty() productName!: string;
-  @ApiProperty() value!: number | string;
+  @ApiProperty({
+    oneOf: [
+      { type: 'integer', format: 'int64' },
+      { type: 'string', pattern: '^[0-9]+$' },
+    ],
+    description:
+      'Integer Toman value for DELIVERED_VALUE; otherwise an integer quantity. Large exact values are decimal strings.',
+  })
+  value!: number | string;
 }
 
 export class AnalyticsTopProductsResponseDto {

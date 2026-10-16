@@ -4,6 +4,9 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Correct Admin analytics monetary OpenAPI schemas to expose exact integer-Toman
+  number-or-decimal-string values, matching runtime serialization.
+
 - Bound REL-03 order creation to 50 global k6 shared iterations across up to
   5 concurrent VUs, added pre-run/post-fixture inventory floor verification,
   deterministic repeated-run idempotency protection, and explicit attempted,

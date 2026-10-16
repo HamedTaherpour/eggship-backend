@@ -1,4 +1,7 @@
-import { resolveAnalyticsDateRange } from './business-date';
+import {
+  resolveAnalyticsDateRange,
+  resolveAnalyticsTodayRange,
+} from './business-date';
 import {
   AnalyticsInvalidDateRangeError,
   AnalyticsRangeTooLargeError,
@@ -9,6 +12,21 @@ describe('analytics business dates', () => {
     const range = resolveAnalyticsDateRange('2026-01-01', '2026-01-01');
     expect(range.start.toISOString()).toBe('2025-12-31T20:30:00.000Z');
     expect(range.end.toISOString()).toBe('2026-01-01T20:30:00.000Z');
+  });
+
+  it('uses the Tehran calendar date at the today-pulse boundary', () => {
+    expect(
+      resolveAnalyticsTodayRange(new Date('2026-01-01T20:29:59.999Z')),
+    ).toMatchObject({
+      start: new Date('2025-12-31T20:30:00.000Z'),
+      end: new Date('2026-01-01T20:30:00.000Z'),
+    });
+    expect(
+      resolveAnalyticsTodayRange(new Date('2026-01-01T20:30:00.000Z')),
+    ).toMatchObject({
+      start: new Date('2026-01-01T20:30:00.000Z'),
+      end: new Date('2026-01-02T20:30:00.000Z'),
+    });
   });
 
   it('supports month, year, and leap-day boundaries', () => {

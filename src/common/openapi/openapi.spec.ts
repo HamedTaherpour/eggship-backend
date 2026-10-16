@@ -77,6 +77,33 @@ describe('OpenAPI foundation', () => {
         );
         expect(document.info.version).toBe(process.env['APP_VERSION']);
 
+        const analyticsSalesSchema = document.components?.schemas?.[
+          'AnalyticsSalesOverviewDto'
+        ] as { properties?: Record<string, unknown> } | undefined;
+        expect(analyticsSalesSchema?.properties?.['grossSales']).toEqual({
+          oneOf: [
+            { type: 'integer', format: 'int64' },
+            { type: 'string', pattern: '^[0-9]+$' },
+          ],
+          description:
+            'Integer Toman amount. Values above JavaScript safe-integer range are decimal strings.',
+        });
+        expect(analyticsSalesSchema?.properties?.['grossSales']).not.toEqual({
+          type: 'object',
+          additionalProperties: {},
+        });
+        const analyticsTopProductSchema = document.components?.schemas?.[
+          'AnalyticsTopProductDto'
+        ] as { properties?: Record<string, unknown> } | undefined;
+        expect(analyticsTopProductSchema?.properties?.['value']).toEqual({
+          oneOf: [
+            { type: 'integer', format: 'int64' },
+            { type: 'string', pattern: '^[0-9]+$' },
+          ],
+          description:
+            'Integer Toman value for DELIVERED_VALUE; otherwise an integer quantity. Large exact values are decimal strings.',
+        });
+
         const okContent =
           healthSchema !== undefined &&
           'content' in healthSchema &&
