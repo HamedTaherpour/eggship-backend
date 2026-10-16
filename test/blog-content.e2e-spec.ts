@@ -351,13 +351,15 @@ describe('Public blog APIs (e2e)', () => {
       .get('/api/v1/blogs')
       .query({ isPublished: true })
       .expect(400);
-    expect(asApiErrorBody(unknown.body).error.code).toBe('BAD_REQUEST');
+    expect(asApiErrorBody(unknown.body).error.code).toBe('VALIDATION_ERROR');
 
     const invalidPage = await request(server())
       .get('/api/v1/blogs')
       .query({ page: 0 })
       .expect(400);
-    expect(asApiErrorBody(invalidPage.body).error.code).toBe('BAD_REQUEST');
+    expect(asApiErrorBody(invalidPage.body).error.code).toBe(
+      'VALIDATION_ERROR',
+    );
 
     const invalidSlug = await request(server())
       .get('/api/v1/blogs/Not_Valid')

@@ -51,6 +51,8 @@ export class OrderingPolicyUnavailableError extends ApplicationError {
       'ORDERING_POLICY_UNAVAILABLE',
       'Ordering is temporarily unavailable. Please try again.',
       HttpStatus.SERVICE_UNAVAILABLE,
+      {},
+      true,
     );
   }
 }

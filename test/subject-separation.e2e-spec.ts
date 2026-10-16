@@ -112,7 +112,7 @@ describe('USER / ADMIN subject separation (e2e)', () => {
       expect(response.body).toMatchObject({
         error: {
           code: 'AUTH_FORBIDDEN',
-          message: 'Insufficient permissions.',
+          message: 'شما اجازه انجام این عملیات را ندارید.',
           details: {},
         },
       });

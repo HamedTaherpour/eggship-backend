@@ -43,6 +43,24 @@ describe('shared error contract', () => {
     });
   });
 
+  it('preserves explicitly public operational failures while hiding other 5xx errors', () => {
+    expect(
+      normalizeException(
+        new ApplicationError(
+          'ORDERING_POLICY_UNAVAILABLE',
+          'Ordering is temporarily unavailable. Please try again.',
+          HttpStatus.SERVICE_UNAVAILABLE,
+          {},
+          true,
+        ),
+      ),
+    ).toEqual({
+      code: 'ORDERING_POLICY_UNAVAILABLE',
+      message: 'Ordering is temporarily unavailable. Please try again.',
+      details: {},
+    });
+  });
+
   it('normalizes generic Nest exceptions without exposing framework text', () => {
     expect(
       normalizeException(

@@ -623,19 +623,25 @@ describe('Product catalog APIs (e2e)', () => {
       .get('/api/v1/products')
       .query({ isActive: 'false' })
       .expect(400);
-    expect(asApiErrorBody(rejectedFilter.body).error.code).toBe('BAD_REQUEST');
+    expect(asApiErrorBody(rejectedFilter.body).error.code).toBe(
+      'VALIDATION_ERROR',
+    );
 
     const rejectedUnknown = await request(server())
       .get('/api/v1/products')
       .query({ unknown: 'x' })
       .expect(400);
-    expect(asApiErrorBody(rejectedUnknown.body).error.code).toBe('BAD_REQUEST');
+    expect(asApiErrorBody(rejectedUnknown.body).error.code).toBe(
+      'VALIDATION_ERROR',
+    );
 
     const rejectedSort = await request(server())
       .get('/api/v1/products')
       .query({ sortBy: 'stock' })
       .expect(400);
-    expect(asApiErrorBody(rejectedSort.body).error.code).toBe('BAD_REQUEST');
+    expect(asApiErrorBody(rejectedSort.body).error.code).toBe(
+      'VALIDATION_ERROR',
+    );
   });
 
   it('public detail returns active products and hides inactive / inactive-category', async () => {
@@ -790,7 +796,7 @@ describe('Product catalog APIs (e2e)', () => {
         categoryId: activeCategoryId,
       })
       .expect(400);
-    expect(asApiErrorBody(badPrice.body).error.code).toBe('BAD_REQUEST');
+    expect(asApiErrorBody(badPrice.body).error.code).toBe('VALIDATION_ERROR');
 
     const badCategory = await request(server())
       .post('/api/v1/admin/products')
@@ -830,7 +836,7 @@ describe('Product catalog APIs (e2e)', () => {
       .query({ unknown: 'x' })
       .set('Authorization', `Bearer ${token}`)
       .expect(400);
-    expect(asApiErrorBody(rejected.body).error.code).toBe('BAD_REQUEST');
+    expect(asApiErrorBody(rejected.body).error.code).toBe('VALIDATION_ERROR');
   });
 
   it('OpenAPI documents Product operations with integer Toman price', () => {

@@ -283,7 +283,7 @@ describe('authorization guard boundary (e2e)', () => {
     expect(response.body).toMatchObject({
       error: {
         code: 'AUTH_FORBIDDEN',
-        message: 'Insufficient permissions.',
+        message: 'شما اجازه انجام این عملیات را ندارید.',
         details: {},
       },
     });
@@ -323,7 +323,7 @@ describe('authorization guard boundary (e2e)', () => {
       expect(response.body).toMatchObject({
         error: {
           code: 'AUTH_FORBIDDEN',
-          message: 'Insufficient permissions.',
+          message: 'شما اجازه انجام این عملیات را ندارید.',
           details: {},
         },
       });
@@ -392,7 +392,10 @@ describe('authorization guard boundary (e2e)', () => {
     const response = await get('inventory', token).expect(403);
 
     expect(response.body).toMatchObject({
-      error: { code: 'AUTH_FORBIDDEN', message: 'Insufficient permissions.' },
+      error: {
+        code: 'AUTH_FORBIDDEN',
+        message: 'شما اجازه انجام این عملیات را ندارید.',
+      },
     });
     expect(logs.events('authz.admin_lookup_failed')[0]).toMatchObject({
       level: 'error',
@@ -422,7 +425,10 @@ describe('authorization guard boundary (e2e)', () => {
     const response = await get('undeclared', token).expect(403);
 
     expect(response.body).toMatchObject({
-      error: { code: 'AUTH_FORBIDDEN', message: 'Insufficient permissions.' },
+      error: {
+        code: 'AUTH_FORBIDDEN',
+        message: 'شما اجازه انجام این عملیات را ندارید.',
+      },
     });
     expect(JSON.stringify(response.body)).not.toMatch(/no_permissions/u);
     expect(logs.events('authz.denied')[0]).toMatchObject({

@@ -35,7 +35,12 @@ export function normalizeException(
         : exception.httpStatus;
     return {
       code: exception.code,
-      message: publicMessageForCode(exception.code, status, exception.message),
+      message: publicMessageForCode(
+        exception.code,
+        status,
+        exception.message,
+        exception instanceof AuthError || exception.exposePublicly,
+      ),
       details: safePublicDetails(exception.details),
     };
   }
@@ -109,7 +114,10 @@ function isPublicApplicationError(
   exception: unknown,
 ): exception is ApplicationError | AuthError {
   if (exception instanceof AuthError) return true;
-  return exception instanceof ApplicationError && exception.httpStatus < 500;
+  return (
+    exception instanceof ApplicationError &&
+    (exception.httpStatus < 500 || exception.exposePublicly)
+  );
 }
 
 function isValidationResponse(
@@ -172,8 +180,16 @@ export function publicMessageForCode(
   code: string,
   status: number,
   existingMessage?: string,
+  allowPublicServerError = false,
 ): string {
-  if (status >= 500) return INTERNAL_MESSAGE;
+  if (status >= 500 && !allowPublicServerError) return INTERNAL_MESSAGE;
+  if (
+    status >= 500 &&
+    allowPublicServerError &&
+    existingMessage !== undefined
+  ) {
+    return existingMessage;
+  }
   if (existingMessage !== undefined && isPersianMessage(existingMessage)) {
     return existingMessage;
   }

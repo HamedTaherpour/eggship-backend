@@ -43,7 +43,9 @@ export class ApiExceptionFilter implements ExceptionFilter {
       requestId,
     };
 
-    if (status >= 500) {
+    const expectedOperationalFailure =
+      exception instanceof ApplicationError && exception.exposePublicly;
+    if (status >= 500 && !expectedOperationalFailure) {
       this.logger.error(
         {
           module: 'http',

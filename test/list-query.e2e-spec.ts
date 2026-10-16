@@ -148,8 +148,8 @@ describe('list query primitives (e2e)', () => {
 
       expect(response.body).toMatchObject({
         error: {
-          code: 'BAD_REQUEST',
-          message: 'Request validation failed.',
+          code: 'VALIDATION_ERROR',
+          message: 'اطلاعات واردشده معتبر نیست.',
         },
       });
       expect(
@@ -169,9 +169,15 @@ describe('list query primitives (e2e)', () => {
 
     expect(response.body).toMatchObject({
       error: {
-        code: 'BAD_REQUEST',
+        code: 'VALIDATION_ERROR',
         details: {
-          violations: ['property randomInternalThing should not exist'],
+          violations: [
+            {
+              field: 'randomInternalThing',
+              message: 'این فیلد مجاز نیست.',
+              rule: 'whitelistValidation',
+            },
+          ],
         },
       },
     });

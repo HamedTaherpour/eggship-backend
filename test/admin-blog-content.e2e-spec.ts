@@ -528,14 +528,16 @@ describe('Admin blog APIs (e2e)', () => {
       })
       .expect(400);
 
-    expect(asApiErrorBody(invalid.body).error.code).toBe('BAD_REQUEST');
+    expect(asApiErrorBody(invalid.body).error.code).toBe('VALIDATION_ERROR');
 
     const unknownQuery = await request(server())
       .get('/api/v1/admin/blogs')
       .query({ unknown: 'x' })
       .set('Authorization', `Bearer ${token}`)
       .expect(400);
-    expect(asApiErrorBody(unknownQuery.body).error.code).toBe('BAD_REQUEST');
+    expect(asApiErrorBody(unknownQuery.body).error.code).toBe(
+      'VALIDATION_ERROR',
+    );
   });
 
   it('OpenAPI documents Admin Blog operations', () => {

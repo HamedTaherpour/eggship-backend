@@ -428,7 +428,7 @@ describe('Admin auth (e2e)', () => {
       asApiErrorBody(wrong.body).error.message,
     );
     expect(asApiErrorBody(unknown.body).error.message).toBe(
-      'Invalid email or password.',
+      'ایمیل یا رمز عبور نادرست است.',
     );
     expect(JSON.stringify(unknown.body)).not.toMatch(
       /not found|WRONG_ADMIN|EMAIL_NOT_FOUND/iu,

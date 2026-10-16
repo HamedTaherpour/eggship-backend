@@ -11,17 +11,20 @@ export class ApplicationError extends Error {
   readonly code: string;
   readonly httpStatus: number;
   readonly details: Record<string, unknown>;
+  readonly exposePublicly: boolean;
 
   constructor(
     code: string,
     message: string,
     httpStatus: number = HttpStatus.BAD_REQUEST,
     details: Record<string, unknown> = {},
+    exposePublicly = false,
   ) {
     super(message);
     this.name = 'ApplicationError';
     this.code = code;
     this.httpStatus = httpStatus;
     this.details = details;
+    this.exposePublicly = exposePublicly;
   }
 }

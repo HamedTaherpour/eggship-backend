@@ -841,7 +841,7 @@ describe('Admin pricing and discount APIs (e2e)', () => {
         percentValue: 101,
       })
       .expect(400);
-    expect(asApiErrorBody(badPercent.body).error.code).toBe('BAD_REQUEST');
+    expect(asApiErrorBody(badPercent.body).error.code).toBe('VALIDATION_ERROR');
 
     const badTypeValue = await request(server())
       .post('/api/v1/admin/discounts')
