@@ -41,10 +41,11 @@ export class InventoryReconciliationService {
         });
       }
 
-      const [reservationRows, ledgerRows] = await Promise.all([
-        this.reservations.listByProduct(id, ctx),
-        this.ledger.listByProduct(id, ctx),
-      ]);
+      // Interactive Prisma transactions use one database client. Keep these
+      // reads serial so the pg driver never receives concurrent queries on
+      // that client; Repeatable Read preserves their shared snapshot.
+      const reservationRows = await this.reservations.listByProduct(id, ctx);
+      const ledgerRows = await this.ledger.listByProduct(id, ctx);
 
       return reconcileInventorySnapshot({
         productId: id,

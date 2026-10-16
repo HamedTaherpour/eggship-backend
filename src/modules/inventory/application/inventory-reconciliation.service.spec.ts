@@ -100,6 +100,34 @@ describe('InventoryReconciliationService', () => {
     );
   });
 
+  it('serializes repository reads on the snapshot transaction client', async () => {
+    balances.findByProductId.mockResolvedValue(balance());
+    let releaseReservations!: () => void;
+    let reservationsSettled = false;
+    const reservationsStarted = new Promise<void>((resolve) => {
+      reservations.listByProduct.mockImplementationOnce(async () => {
+        resolve();
+        await new Promise<void>((done) => {
+          releaseReservations = done;
+        });
+        reservationsSettled = true;
+        return [];
+      });
+    });
+    ledger.listByProduct.mockImplementationOnce(() => {
+      expect(reservationsSettled).toBe(true);
+      return Promise.resolve([]);
+    });
+
+    const reconciliation = service.reconcileProduct(PRODUCT_ID);
+    await reservationsStarted;
+    expect(ledger.listByProduct).not.toHaveBeenCalled();
+
+    releaseReservations();
+    await reconciliation;
+    expect(ledger.listByProduct).toHaveBeenCalledTimes(1);
+  });
+
   it('logs completion telemetry without dumping ledger rows', async () => {
     balances.findByProductId.mockResolvedValue(
       balance({ onHand: 5, available: 5 }),
