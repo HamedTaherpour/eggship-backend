@@ -93,13 +93,13 @@ describe('Notification persistence (integration)', () => {
   it('lists and bulk-marks only the principal owner inbox', async () => {
     const owner = await user();
     const other = await user();
-    const first = await notifications.create(createInput(owner.id));
     await notifications.create(createInput(owner.id));
+    const newest = await notifications.create(createInput(owner.id));
     await notifications.create(createInput(other.id));
 
     expect(
       await notifications.listOwned(owner.id, { page: 1, pageSize: 1 }),
-    ).toMatchObject({ total: 2, items: [{ id: first.id }] });
+    ).toMatchObject({ total: 2, items: [{ id: newest.id }] });
     expect(await notifications.countUnreadForOwner(owner.id)).toBe(2);
     expect(await notifications.markAllReadForOwner(owner.id)).toBe(2);
     expect(await notifications.countUnreadForOwner(owner.id)).toBe(0);

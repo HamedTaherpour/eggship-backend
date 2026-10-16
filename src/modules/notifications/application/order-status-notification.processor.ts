@@ -1,6 +1,6 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { forwardRef, Inject, Injectable } from '@nestjs/common';
 import type { Job } from 'bullmq';
-import type { ConfigService } from '@nestjs/config';
+import { ConfigService } from '@nestjs/config';
 import type { WorkerProcessor } from '../../../infrastructure/worker/worker.types';
 import type {
   RecoveryProcessor,
@@ -18,7 +18,7 @@ import { NotificationDeliveryRepository } from '../infrastructure/notification-d
 import { NotificationRepository } from '../infrastructure/notification.repository';
 import { PushInstallationRepository } from '../infrastructure/push-installation.repository';
 import type { AsyncJobEnvelope } from '../../../infrastructure/queue/async-job-context.service';
-import type { AsyncRecoveryService } from '../../async-recovery/application/async-recovery.service';
+import { AsyncRecoveryService } from '../../async-recovery/application/async-recovery.service';
 
 export const ORDER_STATUS_PROCESSOR_IDENTITY = 'notifications.order-status.v1';
 const EVENT_TYPE = 'order.status.changed';
@@ -52,6 +52,7 @@ export class OrderStatusNotificationProcessor
     private readonly installations: PushInstallationRepository,
     @Inject(PUSH_DELIVERY_PROVIDER)
     private readonly provider: PushDeliveryProvider,
+    @Inject(forwardRef(() => AsyncRecoveryService))
     private readonly recovery: AsyncRecoveryService,
     private readonly config: ConfigService,
   ) {}

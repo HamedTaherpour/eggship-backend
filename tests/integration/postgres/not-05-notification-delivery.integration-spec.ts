@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { Test } from '@nestjs/testing';
+import { Test, type TestingModule } from '@nestjs/testing';
 import { PrismaService } from '../../../src/infrastructure/database/prisma/prisma.service';
 import { NotificationsModule } from '../../../src/modules/notifications/notifications.module';
 import { NotificationDeliveryRepository } from '../../../src/modules/notifications/infrastructure/notification-delivery.repository';
@@ -10,6 +10,7 @@ import { postgresIntegrationImports } from '../support/postgres-testing-module';
 import { assertDestructiveOperationsAllowed } from '../support/integration-environment';
 
 describe('NOT-05 notification delivery PostgreSQL proof (integration)', () => {
+  let moduleRef: TestingModule;
   let prisma: PrismaService;
   let deliveries: NotificationDeliveryRepository;
   let installations: PushInstallationRepository;
@@ -18,7 +19,7 @@ describe('NOT-05 notification delivery PostgreSQL proof (integration)', () => {
   const fixtureInstallations: string[] = [];
 
   beforeAll(async () => {
-    const moduleRef = await Test.createTestingModule({
+    moduleRef = await Test.createTestingModule({
       imports: postgresIntegrationImports([NotificationsModule]),
     }).compile();
     prisma = moduleRef.get(PrismaService);
@@ -52,7 +53,7 @@ describe('NOT-05 notification delivery PostgreSQL proof (integration)', () => {
     fixtureInstallations.length = 0;
   });
 
-  afterAll(async () => prisma.$disconnect());
+  afterAll(async () => moduleRef.close());
 
   it('materializes the initial snapshot once under concurrent processors', async () => {
     const user = await createUser();

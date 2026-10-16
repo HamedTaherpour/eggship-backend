@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { Test } from '@nestjs/testing';
-import type { Job } from 'bullmq';
+import type { Job, Queue } from 'bullmq';
 import { QueueFactory } from '../../../src/infrastructure/queue/queue.factory';
 import { AsyncJobContextService } from '../../../src/infrastructure/queue/async-job-context.service';
 import { QueueInfrastructureModule } from '../../../src/infrastructure/queue/queue-infrastructure.module';
@@ -26,6 +26,7 @@ describe('NOT-05 notification worker Redis/BullMQ proof (integration)', () => {
   let context: AsyncJobContextService;
   let worker: WorkerService;
   let app: INestApplicationContext;
+  const queues: Queue[] = [];
 
   beforeAll(async () => {
     assertDestructiveOperationsAllowed();
@@ -46,6 +47,9 @@ describe('NOT-05 notification worker Redis/BullMQ proof (integration)', () => {
 
   afterAll(async () => {
     if (worker !== undefined) await worker.stop();
+    for (const queue of queues) {
+      await queue.obliterate({ force: true });
+    }
     if (app !== undefined) await app.close();
   });
 
@@ -62,6 +66,7 @@ describe('NOT-05 notification worker Redis/BullMQ proof (integration)', () => {
       },
     };
     const queue = queueFactory.create(queueName, { attempts: 1 });
+    queues.push(queue);
     await worker.start([processor]);
     const orderId = randomUUID();
     await queue.add(
@@ -92,6 +97,7 @@ describe('NOT-05 notification worker Redis/BullMQ proof (integration)', () => {
       attempts: 2,
       backoff: { type: 'fixed', delay: 10 },
     });
+    queues.push(queue);
     await worker.start([processor]);
     await queue.add(
       'order.status.changed',

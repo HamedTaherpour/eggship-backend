@@ -25,6 +25,7 @@ import { NotificationDeliveryRepository } from './infrastructure/notification-de
   exports: [
     NotificationRepository,
     OrderStatusNotificationService,
+    PushInstallationRepository,
     PushInstallationService,
     NotificationDeliveryRepository,
   ],

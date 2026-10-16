@@ -3,22 +3,22 @@ import type { Server } from 'node:http';
 import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
-import { configureApplication } from '../src/app.setup';
-import { PrismaService } from '../src/infrastructure/database/prisma/prisma.service';
-import { postgresIntegrationImports } from '../tests/integration/support/postgres-testing-module';
-import { UsersModule } from '../src/modules/users/users.module';
-import { NotificationsModule } from '../src/modules/notifications/notifications.module';
-import { AuthModule } from '../src/modules/auth/auth.module';
-import { AccessTokenService } from '../src/modules/auth/infrastructure/access-token.service';
-import { AuthSubjectType } from '../src/modules/auth/domain/subject-type';
-import { ACCESS_TOKEN_COOKIE_NAME } from '../src/modules/auth/domain/auth-cookies';
+import { configureApplication } from '../../../src/app.setup';
+import { PrismaService } from '../../../src/infrastructure/database/prisma/prisma.service';
+import { postgresIntegrationImports } from '../support/postgres-testing-module';
+import { UsersModule } from '../../../src/modules/users/users.module';
+import { NotificationsModule } from '../../../src/modules/notifications/notifications.module';
+import { AuthModule } from '../../../src/modules/auth/auth.module';
+import { AccessTokenService } from '../../../src/modules/auth/infrastructure/access-token.service';
+import { AuthSubjectType } from '../../../src/modules/auth/domain/subject-type';
+import { ACCESS_TOKEN_COOKIE_NAME } from '../../../src/modules/auth/domain/auth-cookies';
 import {
   bootstrapBrowserCsrf,
   browserRequest,
   type BrowserCsrfSession,
-} from './helpers/csrf-browser';
+} from '../../../test/helpers/csrf-browser';
 
-describe('NOT-04 push installations (focused e2e)', () => {
+describe('NOT-04 push installations (PostgreSQL integration)', () => {
   type InstallationResponse = {
     data: {
       id: string;
