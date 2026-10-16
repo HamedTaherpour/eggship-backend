@@ -105,6 +105,7 @@ describe('RedisService', () => {
     await service.onModuleDestroy();
     expect(client.connectCalls).toBe(1);
     expect(client.quitCalls).toBe(1);
+    expect(client.disconnectCalls).toBe(0);
     expect(service.getCommandClient()).toBeUndefined();
   });
 
@@ -120,7 +121,7 @@ describe('RedisService', () => {
     );
 
     await expect(service.onModuleInit()).resolves.toBeUndefined();
-    expect(client.disconnectCalls).toBe(0);
+    expect(client.disconnectCalls).toBe(1);
     expect(output()).toContain('Redis connection unavailable');
     expect(output()).not.toContain(redisUrl);
     expect(output()).not.toContain('private-password');
@@ -128,6 +129,8 @@ describe('RedisService', () => {
       configured: true,
       ready: false,
     });
+    await service.onModuleDestroy();
+    expect(client.disconnectCalls).toBe(1);
   });
 
   it('derives readiness from the lifecycle client after disconnect and recovery', async () => {

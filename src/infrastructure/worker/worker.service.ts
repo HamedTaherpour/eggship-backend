@@ -39,102 +39,132 @@ export class WorkerService {
     try {
       for (const processor of processors) {
         const connection = this.redisFactory.createWorkerClient(redisUrl);
-        const worker = new Worker<AsyncJobEnvelope<unknown>, void, string>(
-          processor.queueName,
-          async (job) => {
-            if (
-              processor.jobName !== undefined &&
-              processor.jobName !== job.name
-            )
-              return;
-            this.beginJob();
-            const started = Date.now();
-            const correlationId =
-              job.data?.metadata?.correlationId ?? 'invalid';
-            this.logger.info(
-              {
-                module: 'worker',
-                operation: 'job_started',
-                queue: processor.queueName,
-                jobId: job.id,
-                jobName: job.name,
-                correlationId,
-                attemptNumber: job.attemptsMade + 1,
-              },
-              'Worker job started',
-            );
-            try {
-              await this.context.runWithEnvelope(job.data, () =>
-                processor.process(job),
-              );
+        let worker: EggShipWorker | undefined;
+        try {
+          // Establish the supplied client before constructing Worker. BullMQ
+          // starts its blocking connection during construction; doing this
+          // first keeps a failed startup from leaving an internal retry loop.
+          await connection.connect();
+          worker = new Worker<AsyncJobEnvelope<unknown>, void, string>(
+            processor.queueName,
+            async (job) => {
+              if (
+                processor.jobName !== undefined &&
+                processor.jobName !== job.name
+              )
+                return;
+              this.beginJob();
+              const started = Date.now();
+              const correlationId =
+                job.data?.metadata?.correlationId ?? 'invalid';
               this.logger.info(
                 {
                   module: 'worker',
-                  operation: 'job_completed',
+                  operation: 'job_started',
                   queue: processor.queueName,
                   jobId: job.id,
                   jobName: job.name,
                   correlationId,
-                  outboxEventId: (
-                    job.data as { data?: { outboxEventId?: string } }
-                  )?.data?.outboxEventId,
-                  eventType: (job.data as { data?: { eventType?: string } })
-                    ?.data?.eventType,
-                  eventVersion: (
-                    job.data as { data?: { eventVersion?: number } }
-                  )?.data?.eventVersion,
-                  processorIdentity:
-                    processor.identity ??
-                    `${processor.queueName}:${processor.jobName ?? job.name}`,
-                  durationMs: Date.now() - started,
+                  attemptNumber: job.attemptsMade + 1,
                 },
-                'Worker job completed',
+                'Worker job started',
               );
-            } catch (error: unknown) {
-              const normalized =
+              try {
+                await this.context.runWithEnvelope(job.data, () =>
+                  processor.process(job),
+                );
+                this.logger.info(
+                  {
+                    module: 'worker',
+                    operation: 'job_completed',
+                    queue: processor.queueName,
+                    jobId: job.id,
+                    jobName: job.name,
+                    correlationId,
+                    outboxEventId: (
+                      job.data as { data?: { outboxEventId?: string } }
+                    )?.data?.outboxEventId,
+                    eventType: (job.data as { data?: { eventType?: string } })
+                      ?.data?.eventType,
+                    eventVersion: (
+                      job.data as { data?: { eventVersion?: number } }
+                    )?.data?.eventVersion,
+                    processorIdentity:
+                      processor.identity ??
+                      `${processor.queueName}:${processor.jobName ?? job.name}`,
+                    durationMs: Date.now() - started,
+                  },
+                  'Worker job completed',
+                );
+              } catch (error: unknown) {
+                const normalized =
+                  error instanceof Error
+                    ? error
+                    : new Error('Worker processor failed.');
+                this.failures.report(
+                  {
+                    queueName: processor.queueName,
+                    jobName: job.name,
+                    jobId: job.id,
+                    attemptsMade: job.attemptsMade + 1,
+                    correlationId,
+                    category: failureCategory(error),
+                    reasonCode: failureReason(error),
+                  },
+                  normalized,
+                );
+                if (isPermanentProcessorFailure(error)) return;
+                throw normalized;
+              } finally {
+                this.finishJob();
+              }
+            },
+            {
+              connection,
+              // Gate BullMQ's retry loop on readiness. If initialization fails,
+              // no background runRetryDelay timer is created before start()
+              // reaches its failure cleanup path.
+              autorun: false,
+              concurrency: policy.concurrency,
+              lockDuration: policy.lockDurationMs,
+            },
+          );
+          worker.on('error', (error: Error) => {
+            this.logger.error(
+              {
+                module: 'worker',
+                operation: 'worker_error',
+                queue: processor.queueName,
+              },
+              'Worker infrastructure error',
+              error,
+            );
+          });
+          this.workers.push({ worker, connection });
+          await worker.waitUntilReady();
+          void worker
+            .run()
+            .catch((error: unknown) =>
+              worker?.emit(
+                'error',
                 error instanceof Error
                   ? error
-                  : new Error('Worker processor failed.');
-              this.failures.report(
-                {
-                  queueName: processor.queueName,
-                  jobName: job.name,
-                  jobId: job.id,
-                  attemptsMade: job.attemptsMade + 1,
-                  correlationId,
-                  category: failureCategory(error),
-                  reasonCode: failureReason(error),
-                },
-                normalized,
-              );
-              if (isPermanentProcessorFailure(error)) return;
-              throw normalized;
-            } finally {
-              this.finishJob();
-            }
-          },
-          {
-            connection,
-            concurrency: policy.concurrency,
-            lockDuration: policy.lockDurationMs,
-          },
-        );
-        worker.on('error', (error: Error) => {
-          this.logger.error(
-            {
-              module: 'worker',
-              operation: 'worker_error',
-              queue: processor.queueName,
-            },
-            'Worker infrastructure error',
-            error,
-          );
-        });
-        this.workers.push({ worker, connection });
-        await worker.waitUntilReady();
+                  : new Error('Worker run failed.'),
+              ),
+            );
+        } catch (error: unknown) {
+          if (worker === undefined) {
+            connection.disconnect(false);
+          }
+          throw error;
+        }
       }
     } catch (error: unknown) {
-      await this.stop();
+      // A worker that fails before readiness can still have an in-flight
+      // BullMQ connection initialization. Force-close only this failed-start
+      // path so that its partially initialized sockets cannot retry after the
+      // composition root has already begun shutting down.
+      await this.stop(true);
       throw error;
     }
     this.ready = true;
@@ -149,7 +179,7 @@ export class WorkerService {
     );
   }
 
-  async stop(): Promise<void> {
+  async stop(force = false): Promise<void> {
     if (this.stopping) return;
     this.stopping = true;
     this.ready = false;
@@ -163,10 +193,14 @@ export class WorkerService {
       this.workers.map((resource) => resource.worker.pause(true)),
     );
     for (const resource of this.workers) {
-      await this.closeWithGrace(resource.worker, timeoutMs);
-      if (resource.connection.status === 'ready')
+      // BullMQ closes its duplicated blocking connection. The raw main
+      // connection is shared by BullMQ and remains owned by this service.
+      await this.closeWithGrace(resource.worker, timeoutMs, force);
+      if (force || resource.connection.status !== 'ready') {
+        resource.connection.disconnect(false);
+      } else {
         await resource.connection.quit();
-      else resource.connection.disconnect(false);
+      }
     }
     this.workers = [];
     this.logger.info(
@@ -182,7 +216,12 @@ export class WorkerService {
   private async closeWithGrace(
     worker: EggShipWorker,
     timeoutMs: number,
+    force = false,
   ): Promise<void> {
+    if (force) {
+      await worker.close(true);
+      return;
+    }
     let timer: NodeJS.Timeout | undefined;
     try {
       const result = await Promise.race([

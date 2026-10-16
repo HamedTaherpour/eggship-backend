@@ -118,25 +118,34 @@ describe('WorkerService lifecycle (integration)', () => {
 
   it('fails Worker startup when the configured Redis endpoint is unavailable', async () => {
     const unavailable = 'redis://127.0.0.1:1';
+    const clients: Redis[] = [];
     const app = await Test.createTestingModule({
       imports: [WorkerAppModule],
     })
       .overrideProvider(RedisClientFactory)
       .useValue({
-        createLifecycleClient: (): Redis =>
-          new Redis(unavailable, {
+        createLifecycleClient: (): Redis => {
+          const client = new Redis(unavailable, {
             lazyConnect: true,
             connectTimeout: 100,
+            disconnectTimeout: 0,
             maxRetriesPerRequest: 1,
-            retryStrategy: () => null,
-          }),
-        createWorkerClient: (): Redis =>
-          new Redis(unavailable, {
+            retryStrategy: (): null => null,
+          });
+          clients.push(client);
+          return client;
+        },
+        createWorkerClient: (): Redis => {
+          const client = new Redis(unavailable, {
             lazyConnect: true,
             connectTimeout: 100,
+            disconnectTimeout: 0,
             maxRetriesPerRequest: null,
-            retryStrategy: () => null,
-          }),
+            retryStrategy: (): null => null,
+          });
+          clients.push(client);
+          return client;
+        },
       })
       .compile();
     const lifecycle = app.get(WorkerService);
@@ -144,6 +153,8 @@ describe('WorkerService lifecycle (integration)', () => {
     const processor = new ProbeProcessor(`eggship-worker-unavailable-${runId}`);
     await expect(lifecycle.start([processor])).rejects.toThrow();
     await app.close();
+    expect(clients).toHaveLength(2);
+    expect(clients.every((client) => client.status === 'end')).toBe(true);
   });
 
   it('starts the real composition, consumes canonical jobs, restores correlation, and falls back safely', async () => {
@@ -254,7 +265,7 @@ describe('WorkerService lifecycle (integration)', () => {
     }
   });
 
-  it('gracefully stops delivery, drains in-flight work, and is idempotent', async () => {
+  it('gracefully drains in-flight work and leaves jobs enqueued after stop waiting', async () => {
     const harness = await createHarness();
     const release = deferred();
     harness.processor.block = {
@@ -271,6 +282,11 @@ describe('WorkerService lifecycle (integration)', () => {
       );
       await started;
       const stopping = harness.lifecycle.stop();
+      release.resolve();
+      await stopping;
+      await expect(harness.lifecycle.stop()).resolves.toBeUndefined();
+      expect(harness.processor.completed).toContain(probeId);
+
       const waitingId = `after-stop-${runId}`;
       const waitingJob = await harness.queue.add(
         'after_stop_probe',
@@ -279,10 +295,6 @@ describe('WorkerService lifecycle (integration)', () => {
       expect(await harness.queue.getJobState(waitingJob.id ?? '')).toBe(
         'waiting',
       );
-      release.resolve();
-      await stopping;
-      await expect(harness.lifecycle.stop()).resolves.toBeUndefined();
-      expect(harness.processor.completed).toContain(probeId);
       expect(harness.processor.completed).not.toContain(waitingId);
     } finally {
       release.resolve();
@@ -345,12 +357,15 @@ describe('WorkerService lifecycle (integration)', () => {
     }
   });
 
-  it('distributes same-queue jobs across two real WorkerService instances without app locks', async () => {
+  it('consumes same-queue jobs exactly once across two real WorkerService instances without app locks', async () => {
     const first = await createHarness();
     const second = await createHarness();
     try {
       await first.lifecycle.start([first.processor]);
       await second.lifecycle.start([second.processor]);
+      expect(first.lifecycle.isReady()).toBe(true);
+      expect(second.lifecycle.isReady()).toBe(true);
+      expect(first.processor.queueName).toBe(second.processor.queueName);
       const ids = ['a', 'b', 'c', 'd'].map(
         (value) => `multi-${value}-${runId}`,
       );
@@ -369,8 +384,9 @@ describe('WorkerService lifecycle (integration)', () => {
         new Set([...first.processor.completed, ...second.processor.completed])
           .size,
       ).toBe(ids.length);
-      expect(first.processor.completed.length).toBeGreaterThan(0);
-      expect(second.processor.completed.length).toBeGreaterThan(0);
+      expect(
+        [...first.processor.completed, ...second.processor.completed].sort(),
+      ).toEqual([...ids].sort());
     } finally {
       await Promise.all([disposeHarness(first), disposeHarness(second)]);
     }

@@ -109,7 +109,6 @@ describe('BullMQ infrastructure (integration)', () => {
     }
     if (queue !== undefined) {
       await queue.obliterate({ force: true });
-      await queue.close();
     }
     if (inspectClient !== undefined) {
       const leftover = await inspectClient.keys(`bull:${queueName}:*`);

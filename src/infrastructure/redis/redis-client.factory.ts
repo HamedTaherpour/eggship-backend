@@ -21,6 +21,11 @@ export class RedisClientFactory {
       lazyConnect: true,
       enableReadyCheck: true,
       connectTimeout: 5_000,
+      // Failed-start and forced-close paths use ioredis disconnect(). A
+      // non-zero disconnect timeout leaves a post-close timer alive even
+      // after the socket has reached `end`, delaying process shutdown.
+      // Ready clients still use quit() for graceful shutdown.
+      disconnectTimeout: 0,
       retryStrategy: (attempt) =>
         attempt <= 3 ? Math.min(attempt * 200, 1_000) : null,
       ...overrides,

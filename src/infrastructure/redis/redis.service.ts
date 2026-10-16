@@ -39,8 +39,13 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
         'Redis connection is unavailable; Redis-backed capabilities are disabled',
       );
     });
+    let startupConnection: Promise<void> | undefined;
     try {
-      await this.withStartupTimeout(this.client.connect());
+      startupConnection = this.client.connect();
+      // A timeout may return before ioredis settles its connection promise.
+      // Observe the eventual rejection so it cannot become unhandled.
+      startupConnection.catch(() => undefined);
+      await this.withStartupTimeout(startupConnection);
       if (this.client.status === 'ready') {
         this.logger.info(
           { module: 'redis', operation: 'connect', enabled: true },
@@ -48,6 +53,12 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
         );
       }
     } catch {
+      // A failed startup is a terminal degraded state for this lifecycle
+      // client. Stop the in-flight ioredis attempt now so it cannot continue
+      // opening/retrying after Nest teardown; successful clients retain their
+      // normal reconnect behavior during application operation.
+      this.client.disconnect(false);
+      this.client = undefined;
       this.logger.warn(
         { module: 'redis', operation: 'connect', enabled: true },
         'Redis connection unavailable; API will start degraded',
@@ -93,23 +104,23 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   }
 
   async onModuleDestroy(): Promise<void> {
-    if (this.client === undefined) {
+    const client = this.client;
+    this.client = undefined;
+    if (client === undefined) {
       return;
     }
     try {
-      if (this.client.status === 'ready') {
-        await this.client.quit();
+      if (client.status === 'ready') {
+        await client.quit();
       } else {
-        this.client.disconnect(false);
+        client.disconnect(false);
       }
     } catch {
-      this.client.disconnect(false);
+      client.disconnect(false);
       this.logger.warn(
         { module: 'redis', operation: 'disconnect' },
         'Redis connection required forced shutdown',
       );
-    } finally {
-      this.client = undefined;
     }
   }
 

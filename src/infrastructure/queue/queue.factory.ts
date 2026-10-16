@@ -12,6 +12,7 @@ import { buildDefaultJobOptions } from './queue-options';
 @Injectable()
 export class QueueFactory implements OnModuleDestroy {
   private readonly resources: Array<{ queue: Queue; connection: Redis }> = [];
+  private destroyed = false;
 
   constructor(
     private readonly config: ConfigService,
@@ -51,7 +52,11 @@ export class QueueFactory implements OnModuleDestroy {
   }
 
   async onModuleDestroy(): Promise<void> {
+    if (this.destroyed) return;
+    this.destroyed = true;
     for (const resource of this.resources) {
+      // With a raw ioredis connection BullMQ treats the main connection as
+      // shared and only closes its own duplicated/blocking connection.
       await resource.queue.close();
       if (resource.connection.status === 'ready') {
         await resource.connection.quit();
@@ -59,5 +64,6 @@ export class QueueFactory implements OnModuleDestroy {
         resource.connection.disconnect(false);
       }
     }
+    this.resources.length = 0;
   }
 }

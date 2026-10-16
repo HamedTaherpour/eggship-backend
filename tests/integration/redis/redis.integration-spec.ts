@@ -116,13 +116,16 @@ describe('Redis infrastructure (integration)', () => {
       app.get(ApplicationLogger),
       factory,
     );
-
-    await expect(failing.onModuleInit()).resolves.toBeUndefined();
-    expect(failing.isConfigured()).toBe(true);
-    expect(failing.getCommandClient()).toBeUndefined();
-    await expect(failing.readiness()).resolves.toEqual({
-      configured: true,
-      ready: false,
-    });
+    try {
+      await expect(failing.onModuleInit()).resolves.toBeUndefined();
+      expect(failing.isConfigured()).toBe(true);
+      expect(failing.getCommandClient()).toBeUndefined();
+      await expect(failing.readiness()).resolves.toEqual({
+        configured: true,
+        ready: false,
+      });
+    } finally {
+      await failing.onModuleDestroy();
+    }
   });
 });
