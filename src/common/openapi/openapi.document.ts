@@ -43,6 +43,7 @@ import {
 } from '../../modules/regions/api/dto/region-response.dto';
 import { CreateRegionBodyDto } from '../../modules/regions/api/dto/create-region.dto';
 import { UpdateRegionBodyDto } from '../../modules/regions/api/dto/update-region.dto';
+import { CsrfTokenResponseDto } from '../../modules/auth/api/dto/csrf-response.dto';
 
 export function buildOpenApiConfig(
   appVersion: string,
@@ -142,6 +143,7 @@ export function createOpenApiDocument(app: INestApplication): OpenAPIObject {
       HealthResponseDto,
       ReadinessResponseDto,
       AuthSessionStatusResponseDto,
+      CsrfTokenResponseDto,
       CompleteAuthResponseDto,
       CurrentUserResponseDto,
       AdminLoginResponseDto,

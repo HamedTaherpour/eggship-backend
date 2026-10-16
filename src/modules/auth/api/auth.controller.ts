@@ -45,6 +45,7 @@ import {
   VerifyOtpResponseDto,
 } from './dto/auth-otp.dto';
 import { AuthSessionStatusResponseDto } from './dto/auth-session-status.dto';
+import { CsrfTokenResponseDto } from './dto/csrf-response.dto';
 import { AccessTokenService } from '../infrastructure/access-token.service';
 import { extractAccessTokenFromRequest } from './access-token.extraction';
 import { resolveOtpRequestSource } from './request-source';
@@ -77,6 +78,17 @@ export class AuthController {
   @ApiResponse({
     status: 200,
     description: 'CSRF token cookie and frontend-safe token.',
+    type: CsrfTokenResponseDto,
+    headers: {
+      'Cache-Control': {
+        description: 'Always no-store for CSRF bootstrap responses.',
+        schema: { type: 'string', example: 'no-store' },
+      },
+      'Set-Cookie': {
+        description: 'Readable `eggship_csrf` cookie scoped to `/`.',
+        schema: { type: 'string' },
+      },
+    },
   })
   getCsrf(@Res({ passthrough: true }) response: Response): {
     data: { token: string };

@@ -60,6 +60,18 @@ describe('OpenAPI foundation', () => {
         expect(healthSchema).toBeDefined();
         expect(document.paths?.['/health']).toBeUndefined();
         expect(document.components?.securitySchemes?.['bearer']).toBeDefined();
+        for (const path of ['/api/v1/auth/csrf', '/api/v1/admin/auth/csrf']) {
+          const response = document.paths?.[path]?.get?.responses?.['200'];
+          expect(response).toBeDefined();
+          expect(response && 'content' in response).toBe(true);
+          expect(
+            response && 'content' in response
+              ? response.content?.['application/json']?.schema
+              : undefined,
+          ).toEqual({
+            $ref: '#/components/schemas/CsrfTokenResponseDto',
+          });
+        }
         expect(JSON.stringify(document)).not.toContain(
           'postgresql://openapi.invalid',
         );

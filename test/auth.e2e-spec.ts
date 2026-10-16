@@ -7,6 +7,7 @@ import { AppModule } from '../src/app.module';
 import { configureApplication } from '../src/app.setup';
 import { PrismaService } from '../src/infrastructure/database/prisma/prisma.service';
 import {
+  CSRF_COOKIE_NAMES,
   ACCESS_TOKEN_COOKIE_NAME,
   REFRESH_TOKEN_COOKIE_NAME,
 } from '../src/modules/auth/domain/auth-cookies';
@@ -292,6 +293,22 @@ describe('auth session lifecycle (e2e)', () => {
     sessions.seed(session);
     return { user, session, refreshToken: issued.rawToken };
   }
+
+  it('bootstraps the anonymous customer CSRF contract', async () => {
+    const response = await request(app.getHttpServer() as Server)
+      .get('/api/v1/auth/csrf')
+      .expect(200);
+
+    const body = response.body as { data: { token: string } };
+    expect(typeof body.data.token).toBe('string');
+    expect(body.data.token).not.toHaveLength(0);
+    expect(response.headers['cache-control']).toBe('no-store');
+    expect(
+      asCookieHeaders(response.headers['set-cookie']).some((row) =>
+        row.startsWith(`${CSRF_COOKIE_NAMES.customer}=`),
+      ),
+    ).toBe(true);
+  });
 
   it('rejects refresh without a refresh cookie', async () => {
     csrf = await bootstrapBrowserCsrf(app.getHttpServer() as Server);

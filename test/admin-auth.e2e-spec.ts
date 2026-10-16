@@ -23,6 +23,7 @@ import {
   ACCESS_TOKEN_COOKIE_NAME,
   ADMIN_ACCESS_TOKEN_COOKIE_NAME,
   ADMIN_REFRESH_TOKEN_COOKIE_NAME,
+  CSRF_COOKIE_NAMES,
   REFRESH_TOKEN_COOKIE_NAME,
 } from '../src/modules/auth/domain/auth-cookies';
 import type {
@@ -359,6 +360,72 @@ describe('Admin auth (e2e)', () => {
       csrf,
     ).send({ email, password });
   }
+
+  it('bootstraps the anonymous Admin CSRF contract and cookie attributes', async () => {
+    const response = await request(server())
+      .get('/api/v1/admin/auth/csrf')
+      .expect(200);
+
+    const body = response.body as { data: { token: string } };
+    expect(body.data.token).toEqual(expect.any(String));
+    expect(body.data.token).not.toHaveLength(0);
+    expect(response.headers['cache-control']).toBe('no-store');
+
+    const csrfCookie = asCookieHeaders(response.headers['set-cookie']).find(
+      (row) => row.startsWith(`${CSRF_COOKIE_NAMES.admin}=`),
+    );
+    expect(csrfCookie).toBeDefined();
+    expect(csrfCookie).toContain('Path=/api/v1/admin');
+    expect(csrfCookie).toContain('Max-Age=2592000');
+    expect(csrfCookie).toContain('SameSite=Lax');
+    expect(csrfCookie).not.toContain('HttpOnly');
+    expect(csrfCookie).not.toContain('Domain=');
+  });
+
+  it('rejects missing, invalid, mismatched, and disallowed-origin CSRF requests', async () => {
+    const missingHeader = await request(server())
+      .post('/api/v1/admin/auth/logout')
+      .set('Origin', 'http://127.0.0.1:3000')
+      .set('Cookie', csrf.cookie)
+      .expect(403);
+    expect(asApiErrorBody(missingHeader.body).error.code).toBe(
+      'CSRF_TOKEN_MISSING',
+    );
+
+    const invalidToken = await request(server())
+      .post('/api/v1/admin/auth/logout')
+      .set('Origin', 'http://127.0.0.1:3000')
+      .set('Cookie', csrf.cookie)
+      .set('X-CSRF-Token', `${csrf.token}x`)
+      .expect(403);
+    expect(asApiErrorBody(invalidToken.body).error.code).toBe(
+      'CSRF_TOKEN_INVALID',
+    );
+
+    const disallowedOrigin = await request(server())
+      .post('/api/v1/admin/auth/logout')
+      .set('Origin', 'https://admin.example.test')
+      .set('Cookie', csrf.cookie)
+      .set('X-CSRF-Token', csrf.token)
+      .expect(403);
+    expect(asApiErrorBody(disallowedOrigin.body).error.code).toBe(
+      'CSRF_ORIGIN_INVALID',
+    );
+  });
+
+  it('rejects an old header token after repeated bootstrap replaces the cookie', async () => {
+    const old = csrf;
+    const latest = await bootstrapBrowserCsrf(server(), 'admin');
+
+    const response = await request(server())
+      .post('/api/v1/admin/auth/logout')
+      .set('Origin', 'http://127.0.0.1:3000')
+      .set('Cookie', latest.cookie)
+      .set('X-CSRF-Token', old.token)
+      .expect(403);
+
+    expect(asApiErrorBody(response.body).error.code).toBe('CSRF_TOKEN_INVALID');
+  });
 
   it('logs in with canonical email and sets namespaced Admin cookies', async () => {
     const seeded = seedAdmin({ email: 'ops.e2e@example.test' });

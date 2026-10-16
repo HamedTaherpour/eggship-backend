@@ -43,6 +43,7 @@ import {
   AdminLoginResponseDto,
   CurrentAdminResponseDto,
 } from './dto/admin-auth.dto';
+import { CsrfTokenResponseDto } from './dto/csrf-response.dto';
 import { resolveOtpRequestSource } from './request-source';
 
 const AUTH_CACHE_CONTROL = 'no-store';
@@ -74,6 +75,18 @@ export class AdminAuthController {
   @ApiResponse({
     status: 200,
     description: 'CSRF token cookie and frontend-safe token.',
+    type: CsrfTokenResponseDto,
+    headers: {
+      'Cache-Control': {
+        description: 'Always no-store for CSRF bootstrap responses.',
+        schema: { type: 'string', example: 'no-store' },
+      },
+      'Set-Cookie': {
+        description:
+          'Readable `eggship_admin_csrf` cookie scoped to `/api/v1/admin`.',
+        schema: { type: 'string' },
+      },
+    },
   })
   getCsrf(@Res({ passthrough: true }) response: Response): {
     data: { token: string };
@@ -250,6 +263,17 @@ export class AdminAuthController {
     status: 200,
     description: 'Refresh succeeded; new Admin auth cookies are set.',
     type: AuthSessionStatusResponseDto,
+    headers: {
+      'Cache-Control': {
+        description: 'Always no-store for Admin auth responses.',
+        schema: { type: 'string', example: 'no-store' },
+      },
+      'Set-Cookie': {
+        description:
+          'New HttpOnly `eggship_admin_at` and `eggship_admin_rt` cookies.',
+        schema: { type: 'string' },
+      },
+    },
   })
   @ApiUnauthorizedResponse({
     description:
@@ -313,6 +337,17 @@ export class AdminAuthController {
     status: 200,
     description: 'Admin cookies cleared; session revoked when identifiable.',
     type: AuthSessionStatusResponseDto,
+    headers: {
+      'Cache-Control': {
+        description: 'Always no-store for Admin auth responses.',
+        schema: { type: 'string', example: 'no-store' },
+      },
+      'Set-Cookie': {
+        description:
+          'Cleared Admin auth cookies and CSRF cookie using Max-Age=0.',
+        schema: { type: 'string' },
+      },
+    },
   })
   @ApiResponse({
     status: 403,
