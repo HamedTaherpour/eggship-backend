@@ -24,13 +24,17 @@ export class WorkerModule {
       module: WorkerModule,
       providers: [
         ...(options.providers ?? []),
-        {
-          provide: WORKER_PROCESSORS,
-          useFactory: (...processors: WorkerProcessor[]) => processors,
-          inject: options.processorTokens ?? [],
-        },
+        ...(options.processorTokens === undefined
+          ? []
+          : [
+              {
+                provide: WORKER_PROCESSORS,
+                useFactory: (...processors: WorkerProcessor[]) => processors,
+                inject: options.processorTokens,
+              },
+            ]),
       ],
-      exports: [WORKER_PROCESSORS],
+      exports: options.processorTokens === undefined ? [] : [WORKER_PROCESSORS],
     };
   }
 }
