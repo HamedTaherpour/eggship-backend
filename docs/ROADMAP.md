@@ -6,29 +6,29 @@ This is the authoritative execution plan for completing the standalone EggShip A
 
 | Measure                                  | Count |
 | ---------------------------------------- | ----: |
-| Total                                    |   113 |
+| Total                                    |   116 |
 | DONE                                     |    97 |
-| IN_PROGRESS                              |     0 |
-| READY                                    |     3 |
+| IN_PROGRESS                              |     1 |
+| READY                                    |     2 |
 | BLOCKED                                  |     0 |
-| PLANNED                                  |     7 |
+| PLANNED                                  |    10 |
 | NOT_APPLICABLE                           |     6 |
-| Effective remaining implementation tasks |    10 |
+| Effective remaining implementation tasks |    13 |
 
 ## Updated roadmap counts
 
-Total roadmap entries: **113** (milestone headings excluded).
+Total roadmap entries: **116** (milestone headings excluded).
 
 - DONE: 97
-- READY: 3
-- IN_PROGRESS: 0
-- PLANNED: 7
+- IN_PROGRESS: 1
+- READY: 2
+- PLANNED: 10
 - BLOCKED: 0
 - NOT_APPLICABLE: 6
-- Effective remaining implementation tasks: 10
+- Effective remaining implementation tasks: 13
 
 - Current task: `REL-03` (k6 baseline and scenario harness) is **DONE**. Final local-only baseline evidence is retained; no production or capacity claims are made.
-- Current milestone: `M2 — Identity complete` is ready for its remaining review/approval gates. AUTH-10 browser E2E verification and security proof are complete; cookie-authenticated browser mutations are production-ready subject to the normal release gate. `M4 — Ordering complete` requirements remain DONE for the original ORD-01 through ORD-08 / COM / DLU / SET / PRC scope; the pre-frontend gap `ORD-09` is now DONE. Milestone closure remains subject to the normal review/approval gates.
+- Current milestone: `M2 — Identity complete` is ready for its remaining review/approval gates. AUTH-10 browser E2E verification and security proof are complete; cookie-authenticated browser mutations are production-ready subject to the normal release gate. `M4 — Ordering complete` requirements remain DONE for the original ORD-01 through ORD-08 / COM / DLU / SET / PRC scope; the pre-frontend gap `ORD-09` is now DONE, while `FNT-01` and architecture-first `CACHE-01` / `REL-07` remain PLANNED ownership only (V1 Architecture Gap Audit). Milestone closure remains subject to the normal review/approval gates.
 
 ## Status model
 
@@ -62,7 +62,7 @@ Foundation → Identity → Catalog → Inventory → Orders
 
 Redis/BullMQ foundation → Transactional Outbox → Business-critical delivery workers
 
-Feature parity → Reliability and data lifecycle → Liara/provider verification → Frontend integration and launch
+Feature parity → Reliability and data lifecycle → Liara/provider verification → Frontend architecture contracts → Frontend integration and launch
 ```
 
 Tasks may be executed across phases when their explicit dependencies allow it. Dependencies, not phase numbers alone, control execution. No task may introduce a circular module or roadmap dependency.
@@ -80,15 +80,17 @@ The remaining implementation work is intentionally split around one focused Liar
 - `API-ERR-01` — Standardize user-facing API error contract. The audit, conventions, DTO/error mapping, and regression tests can be completed against the local API and are needed before frontend implementation.
 - `DATA-02` — Temporary-state and orphan-cleanup policy is complete locally; its policy contract and ownership are settled before hosted cleanup execution.
 - `ORD-09` — Customer checkout note contract and persistence. Product/migration gate before Storefront checkout implementation.
-- `NOT-06` — Push installation channel and OS metadata. Product/privacy gate before push-campaign or native-app targeting work; does not reopen NOT-04/NOT-05.
+- `FNT-01` — Frontend client correctness contract. Architecture/product gate before substantial Storefront/Admin frontend work.
+- `CACHE-01` — Cache invalidation and realtime architecture. Document architecture before frontend; main implementation waits until Storefront/Landing/React Query flows exist.
+- `REL-07` — HTTP overload and backpressure contract. Architecture before production capacity verification; measurement owners remain `REL-04` / `REL-05`.
 
 ### LIARA / PROVIDER VERIFICATION
 
 - `MED-02` — Private Media delivery. Secure object reads require a real private bucket and provider-compatible presigning proof.
 - `ASY-05` — Concrete scheduled cleanup and expiration jobs. Correctness includes worker scheduling, Redis behavior, retries, and real infrastructure execution.
 - `AUD-04` — Safe diagnostic bundle. Its release metadata dependency and operational access/audit behavior should be verified in the deployed environment.
-- `REL-04` — Normal, hot-SKU, spike, stress, and soak tests. The scenarios need hosted resource observations and capacity evidence without running destructive tests against production.
-- `REL-05` — Database/query and connection-pool review. The aggregate API/worker connection budget and hosted PostgreSQL behavior must be measured together.
+- `REL-04` — Normal, hot-SKU, spike, stress, and soak tests. The scenarios need hosted resource observations and capacity evidence without running destructive tests against production. Overload/backpressure contract ownership is `REL-07`.
+- `REL-05` — Database/query and connection-pool review. The aggregate API/worker connection budget and hosted PostgreSQL behavior must be measured together. Safeguards justified by measurement may land under `REL-07`.
 - `REL-06` — Infrastructure failure and recovery scenarios. PostgreSQL, Redis, worker, and object-storage failure/recovery behavior is provider-dependent.
 - `DATA-03` — Durable business records and backup lifecycle. Backup ownership, isolated restoration, and recovery objectives require hosted database/object-storage evidence.
 - `DEP-04` — Staging, smoke tests, and release metadata. The task creates the production-like deployed verification surface.
@@ -97,15 +99,17 @@ The remaining implementation work is intentionally split around one focused Liar
 
 ### POST-FRONTEND INTEGRATION / PRE-LAUNCH
 
-No currently open roadmap task belongs exclusively to this group. After the local and Liara/provider windows and the `ORD-09` gate, the Admin and Storefront should be built locally, then the backend redeployed for full frontend/backend integration, E2E, deployment checks, and launch readiness.
+- `CACHE-01` — Main cache/realtime implementation and end-to-end freshness verification after Storefront/Landing core read flows and React Query contracts exist (architecture approval first).
+- After the local and Liara/provider windows and the `FNT-01` / `ORD-09` gates, the Admin and Storefront should be built locally, then the backend redeployed for full frontend/backend integration, E2E, deployment checks, and launch readiness.
 
 ### Recommended order
 
 1. Complete `API-ERR-01` locally; implement/test `ASY-05` locally where possible while preserving its hosted verification requirement.
-2. Complete the Liara window in dependency order: `MED-02`, `DEP-04`, `DEP-05`, `REL-04`, `REL-05`, `REL-06`, `AUD-04`, `DEP-06`, and `DATA-03`, with provider-backed deployment, storage, worker, backup/restore, failure/recovery, and capacity evidence; verify `ASY-05` against the hosted worker/Redis services.
+2. Complete the Liara window in dependency order: `MED-02`, `DEP-04`, `DEP-05`, `REL-04`, `REL-05`, `REL-06`, `AUD-04`, `DEP-06`, and `DATA-03`, with provider-backed deployment, storage, worker, backup/restore, failure/recovery, and capacity evidence; verify `ASY-05` against the hosted worker/Redis services. Advance `REL-07` architecture/capacity approval relative to production capacity verification.
 3. Stop hosted services temporarily after backend verification if they are not needed, to avoid unnecessary Liara credit usage.
-4. Build Admin locally, then Storefront/Landing locally.
-5. Redeploy the backend and run full integration/E2E, deployment checks, and launch-readiness validation.
+4. Close pre-frontend architecture/product gates as needed: `FNT-01` and `CACHE-01` architecture (not main cache implementation). `NOT-06` is complete; any future push-campaign or native-app targeting work consumes its metadata contract.
+5. Build Admin locally, then Storefront/Landing locally.
+6. Implement deferred `CACHE-01` work once frontend core flows exist; redeploy the backend and run full integration/E2E, deployment checks, and launch-readiness validation.
 
 ## Phase 0 — Foundation
 
@@ -571,7 +575,7 @@ Scope: Implement domain transition commands (confirm, cancel, ship, deliver) wit
 
 Acceptance criteria: Invalid transitions return stable errors; inventory-affecting transitions call Inventory-owned contracts inside the canonical lock order; concurrent competing transitions have exactly one winner; replay does not rewrite timestamps or repeat Inventory side effects; customer cancel maps Inventory failures to `ORDER_INVALID_TRANSITION`; unit and PostgreSQL integration/concurrency tests cover hot paths.
 
-Explicitly out of scope: HTTP endpoints (ORD-05/ORD-06), order creation (ORD-03), `DELIVERED → RETURNED` (ORD-07), payment, and generic status PATCH.
+Explicitly out of scope: HTTP endpoints (ORD-05/ORD-06), order creation (ORD-03), `DELIVERED -> RETURNED` (ORD-07), payment, and generic status PATCH.
 
 Delivered: Internal `OrderTransitionService` commands `confirmOrder`, `cancelPendingOrderByCustomer`, `cancelOrderByAdmin`, `shipOrder`, `deliverOrder` (no HTTP/OpenAPI). Canonical graph in `order-transitions.ts` without a `RETURNED` runtime edge. Closed repository primitives (`transitionPendingToConfirmed`, `transitionPendingToCancelled`, `transitionPendingToCancelledForOwner`, `transitionConfirmedToCancelled`, `transitionConfirmedToShipped`, `transitionShippedToDelivered`) using `UPDATE ... WHERE status = expectedFrom RETURNING`. Zero-row re-read classification (replay / `ORDER_INVALID_TRANSITION` / `ORDER_NOT_FOUND`). Idempotent replay preserves lifecycle timestamps, `deliveryAt`, and `cancelReason` and skips Inventory. Cancel/ship run in one Orders-owned PostgreSQL transaction: Order row wins first, then `releaseForOrder` / `shipForOrder` join the same opaque `TransactionContext`. Customer cancel maps `INVENTORY_RESERVATION_NOT_FOUND` / `INVENTORY_RESERVATION_CONFLICT` to `ORDER_INVALID_TRANSITION`. Unit coverage plus a PostgreSQL integration/concurrency suite. Live `TEST_DATABASE_URL` run is environment-dependent (not executed here). No schema/migration change.
 
@@ -1334,9 +1338,9 @@ Status: READY | Depends on: REL-02, REL-03 | Primary: Codex | Review: Claude/Cur
 
 Scope: Implement distinct normal-load, hot-SKU contention, spike, controlled stress, and soak scenarios with resource and correctness observations.
 
-Acceptance criteria: Each scenario documents data shape, duration class rather than delivery estimate, thresholds, invariant checks, and safe abort conditions; results are reproducible.
+Acceptance criteria: Each scenario documents data shape, duration class rather than delivery estimate, thresholds, invariant checks, and safe abort conditions; results are reproducible. Overload/backpressure contract and any measurement-justified safeguards are owned by `REL-07`, not silently expanded here.
 
-Explicitly out of scope: Running destructive stress against production.
+Explicitly out of scope: Running destructive stress against production; inventing a global rate-limiter-only solution.
 
 ### REL-05 — Database/query and connection-pool review
 
@@ -1344,9 +1348,9 @@ Status: PLANNED | Depends on: REL-04 | Primary: Codex | Review: Claude/Cursor pe
 
 Scope: Review query plans, N+1 behavior, indexes, transaction duration, deadlocks, PostgreSQL/Prisma connection pooling, and API/worker aggregate connection budgets.
 
-Acceptance criteria: Changes are measurement-backed; unnecessary indexes are avoided; process scaling cannot unknowingly exceed database limits.
+Acceptance criteria: Changes are measurement-backed; unnecessary indexes are avoided; process scaling cannot unknowingly exceed database limits. HTTP admission/backpressure policy that may follow from pool/capacity evidence is owned by `REL-07`.
 
-Explicitly out of scope: Changing databases or adding caches as a shortcut.
+Explicitly out of scope: Changing databases or adding caches as a shortcut; owning the overload/backpressure contract (`REL-07`).
 
 ### REL-06 — Infrastructure failure and recovery scenarios
 
@@ -1357,6 +1361,22 @@ Scope: Verify PostgreSQL/Redis outage behavior, worker crash/restart/retry, pois
 Acceptance criteria: No acknowledged durable state is lost; readiness/liveness behave as designed; retries are bounded/idempotent; operators have safe recovery steps.
 
 Explicitly out of scope: Chaos tooling or external monitoring vendors without approval.
+
+### REL-07 — HTTP overload and backpressure contract
+
+Status: PLANNED | Depends on: REL-03, REL-04, REL-05 | Primary: Human + ChatGPT architecture process, then Codex | Review: Claude/Cursor performance/operations review, Human architecture/capacity approval
+
+Timing: ARCHITECTURE BEFORE PRODUCTION CAPACITY VERIFICATION; IMPLEMENTATION/VERIFICATION BEFORE PRODUCTION.
+
+Human gate: Architecture/capacity approval.
+
+Cross-references: `REL-04` remains measurement owner for normal/hot-SKU/spike/stress/soak scenarios; `REL-05` remains DB/query/pool review owner; `REL-06` remains infrastructure failure/recovery owner. `REL-07` owns the missing overload/backpressure contract and any explicitly justified safeguards resulting from measurement.
+
+Scope: Define how EggShip degrades predictably under sudden load instead of allowing unbounded HTTP work to saturate PostgreSQL or critical dependencies. Evaluate HTTP admission/concurrency control, endpoint classes, timeout budgets, PostgreSQL pool relationship, Redis behavior, queue/worker bounds, load shedding, 429 vs 503 semantics, hot endpoint and hot SKU behavior, Redis-unavailable behavior, protection against DB stampede, retry amplification, and measurable capacity evidence.
+
+Acceptance criteria: Contract and any approved safeguards are evidence-based; a global rate limiter alone is not assumed sufficient; external/SaaS infrastructure is not added without evidence; ownership boundaries with REL-04/REL-05/REL-06 remain explicit.
+
+Explicitly out of scope: Inventing capacity numbers or vendor tooling without measurement; replacing REL-04/REL-05 measurement ownership.
 
 ## Phase 13 — Data Lifecycle
 
@@ -1476,7 +1496,7 @@ Explicitly out of scope: Treating staging as a substitute for integration tests.
 
 ### DEP-05 — Backup strategy and restore test
 
-Status: READY | Depends on: DEP-02 | Primary: Human infrastructure process, then Codex | Review: Human operations approval
+Status: IN_PROGRESS | Depends on: DEP-02 | Primary: Human infrastructure process, then Codex | Review: Human operations approval
 
 Scope: Define PostgreSQL/object-storage backup ownership, encryption, access, recovery objectives, and a repeatable isolated restore test.
 
@@ -1574,6 +1594,42 @@ Acceptance criteria: Cutover criteria, monitoring window, rollback authority, wr
 
 Explicitly out of scope: Autonomous AI cutover and deleting legacy data/services before recovery obligations are met.
 
+## Phase 16 — Frontend Architecture Contracts
+
+Smallest structural addition for V1 Architecture Gap Audit ownership. This phase owns frontend correctness and cache/realtime contracts only; it is not a Storefront/Admin implementation roadmap.
+
+### FNT-01 — Frontend client correctness contract
+
+Status: PLANNED | Depends on: API-ERR-01, AUTH-04, AUTH-10, ORD-03A, FND-05 | Primary: Human + ChatGPT architecture process | Review: Claude/Cursor, Human frontend/product architecture approval
+
+Timing: BEFORE FRONTEND CORE IMPLEMENTATION.
+
+Human gate: Frontend/product architecture approval.
+
+Cross-references: Consumes existing API error (`API-ERR-01`), auth/refresh/CSRF (`AUTH-04`, `AUTH-09`/`AUTH-10`), order idempotency (`ORD-03`/`ORD-03A`), and notification contracts; must not duplicate backend business rules. Integrates with `CACHE-01` for realtime invalidation behavior.
+
+Scope: Define the Storefront/Admin client correctness contract before substantial frontend integration. At minimum cover: generated OpenAPI client strategy; customer/admin auth refresh behavior; CSRF behavior; React Query query-key conventions; React Query retry policy; staleTime versus business correctness; mutation retry rules; duplicate-submit prevention; checkout idempotency-key behavior; request cancellation/races; optimistic-update policy (checkout must not rely on optimistic success); offline cart recovery; hydration/SSR boundaries; PWA/service-worker update lifecycle; stale frontend asset/API compatibility; push deep-link destinations; realtime invalidation integration; error taxonomy consumption.
+
+Acceptance criteria: Approved frontend correctness contracts are recorded for product/architecture review; backend business rules remain owned by their domain tasks; implementation of Storefront/Admin features is not claimed by this task alone.
+
+Explicitly out of scope: Building the Storefront/Admin applications; inventing a full frontend feature roadmap; duplicating Orders/Inventory/Pricing/auth domain rules.
+
+### CACHE-01 — Cache invalidation and realtime architecture
+
+Status: PLANNED | Depends on: FNT-01, ASY-01, INF-01 | Primary: Human + ChatGPT architecture process, then Codex | Review: Claude/Cursor architecture review, Human architecture approval before implementation
+
+Timing: ARCHITECTURE BEFORE FRONTEND; MAIN IMPLEMENTATION AFTER FRONTEND CORE EXISTS.
+
+Human gate: Architecture approval before implementation.
+
+Canonical principle: PostgreSQL controls correctness. Domain events control freshness. Cache controls efficiency.
+
+Scope: Document (then later implement) cache invalidation and realtime architecture spanning React Query client cache, Next.js Storefront/Landing cache, Redis shared API cache, PostgreSQL authority, domain/outbox-driven invalidation, targeted invalidation, cache dependency graph, cache stampede protection / single-flight, stale-while-revalidate where appropriate, SSE direction, Admin realtime order notifications, frontend invalidation/refetch behavior, Redis degraded-mode behavior, and multi-instance Next cache/invalidation considerations. Blog/Landing primarily use Next.js caching + on-demand revalidation. Admin has no general shared response-cache requirement; realtime operational freshness matters more. Checkout remains PostgreSQL-authoritative.
+
+Acceptance criteria: Architecture is approved before substantial cache/realtime implementation; exact TTLs, Redis keys, lock durations, React Query staleTime values, SSE endpoints, and Next version-specific APIs are deferred until real frontend flows and deployment topology exist; main implementation waits until Storefront core read flows, Landing/Blog rendering, React Query contracts, relevant Next.js version, and deployment topology are sufficiently known and end-to-end freshness scenarios can be tested.
+
+Explicitly out of scope: Specifying those deferred concrete values in this roadmap entry; treating Redis as correctness authority; inventing a full frontend feature roadmap.
+
 ## Legacy and new-capability coverage
 
 | Required domain/capability      | Primary roadmap tasks                         |
@@ -1599,6 +1655,9 @@ Explicitly out of scope: Autonomous AI cutover and deleting legacy data/services
 | Refresh-token/session lifecycle | AUTH-02 through AUTH-04                       |
 | User/store referral links       | REF-01 through REF-04                         |
 | Durable notification inbox      | NOT-01 through NOT-06                         |
+| Frontend client correctness     | FNT-01                                        |
+| Cache invalidation / realtime   | CACHE-01                                      |
+| HTTP overload / backpressure    | REL-07 (measurement: REL-04, REL-05)          |
 
 ## Milestones
 
@@ -1620,15 +1679,15 @@ Complete when PRC-01 through PRC-05, ORD-01 through ORD-08 (including ORD-03A), 
 
 ### M5 — Feature parity complete
 
-Complete when referral/visitor, notification, content/media, remaining admin, transactional async, analytics, and audit tasks through Phase 11 are DONE and the legacy/new-capability coverage table has no unowned or unverified domain. `NOT-06` remains a pre-campaign metadata gap and is not required to close M5 feature parity for the existing NOT-01 through NOT-05 delivery path.
+Complete when referral/visitor, notification, content/media, remaining admin, transactional async, analytics, and audit tasks through Phase 11 are DONE and the legacy/new-capability coverage table has no unowned or unverified domain. `NOT-06` is DONE and its metadata contract is available to future campaign/native-app work; it does not reopen NOT-04/NOT-05.
 
 ### M6 — Production hardening complete
 
-Complete when Phases 12 through 14 are DONE: real infrastructure and failure suites pass, measured performance/query/pool work is complete, lifecycle/retention decisions are approved, Liara API/worker/data services are staged, restore is proven, and rollback/release procedures are approved.
+Complete when Phases 12 through 14 are DONE: real infrastructure and failure suites pass, measured performance/query/pool work is complete, `REL-07` overload/backpressure contract and any measurement-justified safeguards are approved, lifecycle/retention decisions are approved, Liara API/worker/data services are staged, restore is proven, and rollback/release procedures are approved.
 
 ### M7 — Launch ready
 
-Complete when the Liara/provider verification window, frontend/backend integration, E2E, deployment checks, and launch-readiness gates pass, and the human production owner approves launch. No legacy cutover or retirement gate is required because the previous backend was prototype-only.
+Complete when the Liara/provider verification window, `FNT-01` frontend correctness contract, approved `CACHE-01` architecture (with deferred main implementation gated as specified), frontend/backend integration, E2E, deployment checks, and launch-readiness gates pass, and the human production owner approves launch. No legacy cutover or retirement gate is required because the previous backend was prototype-only.
 
 ## Explicit unresolved decisions
 
@@ -1648,7 +1707,10 @@ The following are not implementation assumptions:
 - Product-discount lifetime caps are decided in [ADR 0017](adr/0017-discount-lifetime-quantity-limit.md) / DLU-01 (partial discount; PRODUCT LINE only; create consume / pre-ship release; no return restore) and implemented in DLU-02. V1 LINE-then-ORDER composition and single-winner-per-scope rules remain locked in PRC-03 / PRC-05 / [ADR 0015](adr/0015-line-then-order-discount-composition.md). Promo codes and promo-banner behavior remain unapproved.
 - Deferred settlement lifecycle is decided in [ADR 0018](adr/0018-deferred-settlement-lifecycle.md) / SET-01 (separate `OrderSettlement` module; `DELIVERED`-only creation; `OPEN`/`SETTLED` with derived overdue; one current receipt; receipt-required explicit settle; no V1 reopen; `RETURNED` leaves settlement untouched; full `Order.total`; `SUPER_ADMIN`-only grants). Remaining explicit decisions, not implementation assumptions: `WAREHOUSE`/`ORDER_OPS` settlement permission grants (MIG-01 evidence), settlement without receipt, correction/reopen workflow, return/refund/credit adjustments interacting with settlement, multiple receipts or PDF proof, customer-facing settlement surfaces, and due/overdue reminders. No gateway, card/bank fields, refunds, or accounting subsystem is approved.
 - Future USER referral, visitor conversion, attribution correction/reassignment, reward policy, and any broader self-referral rule remain deferred. V1 Visitor attribution, duplicate handling, no-op existing-user behavior, no-reuse codes, and no speculative self-referral matching are settled in ADR 0020 / `instructions/referrals.md`.
-- Notification type/content rules, push provider/consent, delivery guarantees, and token lifecycle. Installation channel/OS metadata and Android web-vs-native campaign eligibility ownership is `NOT-06` (DONE; does not rewrite NOT-04/NOT-05).
+- Notification type/content rules, push provider/consent, delivery guarantees, and token lifecycle remain deferred; installation channel/OS metadata and Android web-vs-native campaign eligibility are implemented in `NOT-06` (DONE) and do not rewrite NOT-04/NOT-05.
+- Frontend client correctness contracts (OpenAPI client, auth refresh/CSRF, React Query, checkout idempotency, offline cart, PWA/SSR, error consumption) are owned by `FNT-01` (PLANNED; before frontend core).
+- Cache invalidation and realtime architecture (React Query / Next / Redis / outbox-driven freshness; Admin SSE direction) are owned by `CACHE-01` (PLANNED; architecture before frontend, main implementation after frontend core).
+- HTTP overload/backpressure contract and measurement-justified safeguards are owned by `REL-07` (PLANNED); scenario measurement remains `REL-04`, DB/pool review remains `REL-05`, infrastructure failure/recovery remains `REL-06`.
 - Media attachment and reference lifecycle is decided in [ADR 0022](adr/0022-media-attachment-and-reference-lifecycle.md) (Human Architecture Gate closed; MED-01 READY): image-only JPEG/PNG/WebP; Product exactly one optional image; Blog cover + Author avatar + durable inline registry; catalog Category has no image; shared library with valid unreferenced Media; `ON DELETE RESTRICT` / `MEDIA_REFERENCED`; replace-without-delete; usage inspection in MED-01; orphan cleanup deferred to DATA-02 with conservative grace (no retention invented); CAT-04 storage/upload bounds preserved. Remaining: MED-01 implementation, DATA-02 orphan policy/durations, DEP-02 live production-bucket verification. Blog Markdown/taxonomy remain ADR 0021 / CNT-04 (DONE).
 - Analytics contracts are settled in [ADR 0029](adr/0029-analytics-contracts-and-business-time-semantics.md) / ANL-01 and [analytics.md](../instructions/analytics.md). Remaining analytics work is implementation/performance work in ANL-02 through ANL-04; no endpoint, index, snapshot, aggregation, or accounting/refund semantics is approved by ANL-01.
 - Retention periods for every data class and backup recovery objectives (classification and approved lifecycle principles in [data-lifecycle.md](data-lifecycle.md); durations remain **UNRESOLVED** pending legal/accounting/operations approval and DATA-02/DATA-03/DEP-05 work).

@@ -4,12 +4,27 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
-- Harden ORD-07 return concurrency: expose InventoryService.lockOrderScope and
-  acquire the Inventory order-scope advisory lock after the Order row lock and
-  before sorted balance locks; re-canonicalize ADR 0024 as a UTF-8 decision
-  contract; add focused Admin HTTP return/bulk coverage and PostgreSQL proof that
-  return recording/completion do not mutate financial snapshots, DLU usage, or
-  Settlement.
+- Bound REL-03 order creation to 50 global k6 shared iterations across up to
+  5 concurrent VUs, added pre-run/post-fixture inventory floor verification,
+  deterministic repeated-run idempotency protection, and explicit attempted,
+  successful, and rejected order counts in reports.
+
+- Add a local-only, idempotent `pnpm load:prepare` workflow for authenticated k6 fixtures.
+- Make k6 preparation resumable with checkpointed auth sessions and actionable,
+  non-retrying OTP rate-limit diagnostics.
+
+- Fix REL-03 authenticated order-read fixtures to create/replay one order per
+  synthetic customer, preserve token/order alignment, and report unexpected
+  failures by endpoint, HTTP status, and stable API error code.
+
+- Restore the HTTP test boundary: infrastructure-free E2E suites are separated
+  from PostgreSQL and combined PostgreSQL/Redis integration suites, with
+  lightweight test doubles and canonical API error expectations corrected.
+
+- Re-canonicalize ORD-07 architecture in ADR 0024 as a UTF-8 decision
+  contract (return aggregate, inventory/idempotency, explicit return
+  completion, bulk SHIP/DELIVER, dispatch read model, verification matrix)
+  without changing application source, schema, or roadmap DONE status.
 
 - Complete NOT-06 push installation metadata: require explicit enum-validated
   channel/OS registration fields, preserve legacy rows as unknown, and add
@@ -38,25 +53,31 @@ All notable changes to this project will be documented in this file.
   non-secret `__ENV` values explicitly at the k6 CLI boundary while preserving
   inherited credential handling.
 
-- REL-03 bounded k6 baseline harness with separate smoke, public browse,
-  authenticated order-read/create, and Admin analytics scenarios; explicit
-  non-production safety guards, fixture contract, aggregate JSON/Markdown
-  results, and no production capacity or SLA claims.
-
-- Closed REL-03 with final local-only baseline evidence for all five scenarios;
-  production capacity, SLA, stress, spike, soak, and provider-capacity claims
-  remain deferred to REL-04/REL-05.
-
 - Fix Order and OrderLine creation timestamps to use PostgreSQL's transaction
   clock, preventing Prisma adapter timezone displacement under Asia/Tehran;
   no existing rows are rewritten.
 
 ### Added
 
+- Database-authoritative timestamps for Order, OrderLine, InventoryLedger,
+  PriceHistory, and AuditLog append writes; no historical rows are rewritten.
+
 - Canonical `pnpm db:seed:dev` local fixture with fail-closed loopback
   targeting, deterministic catalog/region/products, append-only inventory
   RECEIVE evidence, current integer-Toman prices, and local commerce settings;
   no customer credentials, orders, discounts, or media are created.
+
+- REL-03 bounded k6 baseline harness with separate smoke, public browse,
+  authenticated order-read/create, and Admin analytics scenarios; explicit
+  non-production safety guards, fixture contract, aggregate JSON/Markdown
+  results, and no production capacity or SLA claims. The scenario entry points
+  now persist verified JSON/Markdown evidence with safe rejection-code counts,
+  credential-free base URLs, and configured p99 latency statistics; the
+  development seed refuses contaminated inventory history.
+
+- Closed REL-03 with final local-only baseline evidence for all five scenarios;
+  production capacity, SLA, stress, spike, soak, and provider-capacity claims
+  remain deferred to REL-04/REL-05.
 
 - ANL-04 analytics performance verification: a concurrent PostgreSQL
   `InventoryLedger(createdAt)` index with real-TEST plan regression evidence;
@@ -94,10 +115,19 @@ All notable changes to this project will be documented in this file.
 
 - ASY-04 durable async failure inspection and processor-approved replay infrastructure, normalized failure metadata, operator lifecycle controls, dedicated RBAC permissions, no-store Admin API, PostgreSQL claim/lease replay dispatch, and durable processor result receipts. Real processor replay proof remains deferred until an approved side-effect processor exists.
 - NOT-04 provider-neutral push installations and durable notification delivery
+
   identity, with ownership-safe lifecycle APIs, CSRF/private-response coverage,
   PostgreSQL concurrency/FK proof, and focused real-Prisma E2E coverage.
 
 ### Fixed
+
+- DEP-05 backup/recovery architecture and isolated restore-drill runbook:
+  Liara-native PostgreSQL backup ownership, explicit non-claims for PITR and
+  Object Storage backup capability, private object-recovery recommendation,
+  cross-system timestamp reconciliation, migration recovery gate, PII-safe
+  evidence format, and a read-only recovery-manifest reconciliation command.
+  No production resources or backups were created; the provider-backed restore
+  drill remains outstanding.
 
 - Keep the API process alive when configured Redis is unavailable while reporting readiness as degraded and failing Redis-backed capabilities closed; Worker startup remains Redis-mandatory.
 
@@ -153,13 +183,14 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
-- Closed AUD-03 with permissioned Admin AuditLog list/detail read APIs, `AUDIT_READ`-only authorization, explicit safe DTOs, allowlisted indexed filters, and deterministic ordering; no recursive read auditing, export, arbitrary metadata search, or schema/index change. Retention/deletion remains DATA-01/DATA-03.
 - NOT-04 foundation: added User-owned push installation lifecycle and
   write-only token registration/revocation APIs, logout-all installation
   suppression, durable provider-neutral NotificationDelivery identity/state,
   typed order destinations, and ADR 0028. Provider adapters/workers and token
   retention cleanup remain deferred to NOT-05/DATA-02.
 - Closed ORD-08 with real-PostgreSQL order audit, concurrency, bounded hot-SKU invariant, and query-plan verification; no production Orders behavior or query/index change required. Full deployed load/spike/stress/soak capacity evidence remains REL-03/REL-04/REL-05.
+
+- Closed AUD-03 with permissioned Admin AuditLog list/detail read APIs, `AUDIT_READ`-only authorization, explicit safe DTOs, allowlisted indexed filters, and deterministic ordering; no recursive read auditing, export, arbitrary metadata search, or schema/index change. Retention/deletion remains DATA-01/DATA-03.
 - Closed REL-02 with deterministic real-PostgreSQL concurrency coordination and durable inventory/order idempotency assertions.
 
 ### Added
