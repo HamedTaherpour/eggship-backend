@@ -3,6 +3,7 @@ import { createPaginatedResponseDto } from '../../../../common/list';
 import type {
   AdminCustomerRecord,
   AdminCustomerReferralView,
+  AdminCustomerStoreProfileView,
 } from '../../domain/customer-admin';
 
 export class AdminCustomerReferralDto {
@@ -44,12 +45,41 @@ export class AdminCustomerListItemDto {
 
   @ApiProperty({ example: 'ABCD2345EF', nullable: true })
   referralCode!: string | null;
+
+  @ApiProperty({ example: 'Central Store', nullable: true, maxLength: 160 })
+  storeName!: string | null;
+
+  @ApiProperty()
+  hasCompleteStoreProfile!: boolean;
 }
 
 /** Admin customer/store detail with immutable referral evidence. */
 export class AdminCustomerDetailDto extends AdminCustomerListItemDto {
   @ApiProperty({ type: AdminCustomerReferralDto, nullable: true })
   referral!: AdminCustomerReferralDto | null;
+
+  @ApiProperty({ type: () => AdminCustomerStoreProfileDto, nullable: true })
+  storeProfile!: AdminCustomerStoreProfileDto | null;
+}
+
+export class AdminCustomerStoreProfileDto {
+  @ApiProperty({ example: 'Central Store', maxLength: 160 })
+  storeName!: string;
+
+  @ApiProperty({ example: 'Main Street 1', maxLength: 500 })
+  address!: string;
+
+  @ApiProperty({ minimum: -90, maximum: 90 })
+  latitude!: number;
+
+  @ApiProperty({ minimum: -180, maximum: 180 })
+  longitude!: number;
+
+  @ApiProperty({ format: 'date-time' })
+  createdAt!: string;
+
+  @ApiProperty({ format: 'date-time' })
+  updatedAt!: string;
 }
 
 export class AdminCustomerResponseDto {
@@ -71,6 +101,8 @@ function toListItem(record: AdminCustomerRecord): AdminCustomerListItemDto {
     updatedAt: record.updatedAt.toISOString(),
     hasReferral: record.referral !== null,
     referralCode: record.referral?.referralCode ?? null,
+    storeName: record.storeName ?? null,
+    hasCompleteStoreProfile: record.hasCompleteStoreProfile ?? false,
   };
 }
 
@@ -98,5 +130,22 @@ export function toAdminCustomerDetailDto(
   return {
     ...toListItem(record),
     referral: record.referral === null ? null : toReferralDto(record.referral),
+    storeProfile:
+      record.storeProfile == null
+        ? null
+        : toStoreProfileDto(record.storeProfile),
+  };
+}
+
+function toStoreProfileDto(
+  profile: AdminCustomerStoreProfileView,
+): AdminCustomerStoreProfileDto {
+  return {
+    storeName: profile.storeName,
+    address: profile.address,
+    latitude: profile.latitude,
+    longitude: profile.longitude,
+    createdAt: profile.createdAt.toISOString(),
+    updatedAt: profile.updatedAt.toISOString(),
   };
 }

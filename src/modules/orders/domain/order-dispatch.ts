@@ -36,6 +36,8 @@ export interface AdminDispatchOrderRecord {
   /** Efficient `_count.lines` — no line payloads. */
   lineCount: number;
   deliveryAt: Date | null;
+  deliveryLatitude: number | null;
+  deliveryLongitude: number | null;
   confirmedAt: Date | null;
   shippedAt: Date | null;
   createdAt: Date;

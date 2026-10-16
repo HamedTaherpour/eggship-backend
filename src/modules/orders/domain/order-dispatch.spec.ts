@@ -20,6 +20,8 @@ function row(
     total: 1000n,
     lineCount: 1,
     deliveryAt: null,
+    deliveryLatitude: null,
+    deliveryLongitude: null,
     confirmedAt: T0,
     shippedAt: null,
     createdAt: T0,

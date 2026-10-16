@@ -51,6 +51,8 @@ function order(overrides: Partial<OrderRecord> = {}): OrderRecord {
     idempotencyKey: '66666666-6666-4666-8666-666666666666',
     idempotencyPayloadHash: 'a'.repeat(64),
     deliveryAt: null,
+    deliveryLatitude: null,
+    deliveryLongitude: null,
     confirmedAt: null,
     shippedAt: null,
     deliveredAt: null,
@@ -135,7 +137,14 @@ describe('AdminOrdersController', () => {
 
   it('maps Admin list rows and keeps list rows free of lines/internal fields', async () => {
     reads.listAdmin.mockResolvedValue({
-      data: [{ ...order(), deliveryAt: new Date('2026-08-29T10:00:00.000Z') }],
+      data: [
+        {
+          ...order(),
+          deliveryAt: new Date('2026-08-29T10:00:00.000Z'),
+          deliveryLatitude: null,
+          deliveryLongitude: null,
+        },
+      ],
       meta: { page: 1, pageSize: 20, total: 1, totalPages: 1 },
     });
     const result = await controller.list({});
@@ -240,6 +249,8 @@ describe('AdminOrdersController', () => {
               total: 1000n,
               lineCount: 2,
               deliveryAt: null,
+              deliveryLatitude: null,
+              deliveryLongitude: null,
               confirmedAt: NOW,
               shippedAt: null,
               createdAt: NOW,

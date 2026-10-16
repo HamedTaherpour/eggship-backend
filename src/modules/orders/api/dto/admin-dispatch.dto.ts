@@ -54,6 +54,12 @@ export class AdminDispatchOrderItemDto {
   @ApiPropertyOptional({ format: 'date-time', nullable: true })
   deliveryAt!: string | null;
 
+  @ApiPropertyOptional({ nullable: true, minimum: -90, maximum: 90 })
+  deliveryLatitude!: number | null;
+
+  @ApiPropertyOptional({ nullable: true, minimum: -180, maximum: 180 })
+  deliveryLongitude!: number | null;
+
   @ApiPropertyOptional({ format: 'date-time', nullable: true })
   confirmedAt!: string | null;
 
@@ -145,6 +151,8 @@ export function toAdminDispatchOrderItemDto(
     total: orderMoneyToJson(row.total),
     lineCount: row.lineCount,
     deliveryAt: row.deliveryAt?.toISOString() ?? null,
+    deliveryLatitude: row.deliveryLatitude ?? null,
+    deliveryLongitude: row.deliveryLongitude ?? null,
     confirmedAt: row.confirmedAt?.toISOString() ?? null,
     shippedAt: row.shippedAt?.toISOString() ?? null,
     createdAt: row.createdAt.toISOString(),

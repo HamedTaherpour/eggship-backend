@@ -40,6 +40,8 @@ export type AdminOrderSortField = (typeof ADMIN_ORDER_SORT_FIELDS)[number];
 export interface AdminOrderListRecord extends OrderListRecord {
   customerPhone: string;
   deliveryAt: Date | null;
+  deliveryLatitude: number | null;
+  deliveryLongitude: number | null;
 }
 
 export interface AdminOrderListQuery extends PageRequest {

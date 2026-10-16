@@ -102,6 +102,25 @@ The remaining implementation work is intentionally split around one focused Liar
 - `CACHE-01` — Main cache/realtime implementation and end-to-end freshness verification after Storefront/Landing core read flows and React Query contracts exist (architecture approval first).
 - After the local and Liara/provider windows and the `FNT-01` / `ORD-09` gates, the Admin and Storefront should be built locally, then the backend redeployed for full frontend/backend integration, E2E, deployment checks, and launch readiness.
 
+### Store Profile and delivery-location rollout closure
+
+STORE-02 through STORE-06 are implemented as an additive StoreProfile,
+immutable Order delivery snapshot, customer profile API extension, order
+profile gate, and Admin read-model extensions. STORE-07 verifies the contracts,
+tests, generated OpenAPI artifact, and documentation.
+
+Production rollout must preserve compatibility in this order:
+
+1. Apply the additive database migration.
+2. Deploy the profile read/write APIs.
+3. Deploy storefront UX that collects and validates the complete profile.
+4. Enable the profile-required order-creation gate.
+5. Deploy the Admin location UI.
+
+The backend change is not a production-readiness claim until this staged
+sequence is coordinated. Enabling step 4 before step 3 would reject existing
+storefront checkout attempts from customers without a profile.
+
 ### Recommended order
 
 1. Complete `API-ERR-01` locally; implement/test `ASY-05` locally where possible while preserving its hosted verification requirement.
@@ -343,6 +362,8 @@ Scope: Implement approved customer/store registration, current-user retrieval, a
 
 Acceptance criteria: Identity uniqueness, user-to-customer/store relationships, and verified-identifier rules are transactional; response DTOs and OpenAPI exclude credential/session fields; update allowlists are explicit.
 
+Delivered: OTP completion remains phone-only. STORE-02/03 add the Users-owned optional one-to-one StoreProfile, authenticated current-user read fields, and owner-scoped create/replace validation without changing login or OTP behavior.
+
 Explicitly out of scope: Referral rewards, store administration, and arbitrary user editing.
 
 ### AUTH-08 — RBAC, permissions, and ownership enforcement
@@ -553,7 +574,7 @@ Acceptance criteria: Money uses integer Toman; required history survives source 
 
 Explicitly out of scope: State transitions, reservation, and payment integration.
 
-Delivered: Prisma `Order` / `OrderLine` with `OrderStatus` enum; immutable product/phone/region snapshots; int4 `unitPrice` and BIGINT persisted `lineTotal`/`subtotal`/`total`; server-computed money helpers; `UNIQUE(orderId, productId)`; optional `idempotencyKey` with `UNIQUE(userId, idempotencyKey)`; DB CHECKs including `lineTotal = unitPrice × quantity` and E.164 `customerPhone`; `OrderRepository` (`createWithLines`, `findById`, `findOwnedById`); ADR 0013; `instructions/orders.md`. No HTTP, payment models, or Inventory orchestration. Address/profile/discount snapshots deferred (MIG-01 / profile / PRC). PostgreSQL integration specs exist; live `TEST_DATABASE_URL` run not executed in this environment.
+Delivered: Prisma `Order` / `OrderLine` with `OrderStatus` enum; immutable product/phone/region snapshots; additive nullable StoreProfile-backed delivery snapshot fields; int4 `unitPrice` and BIGINT persisted `lineTotal`/`subtotal`/`total`; server-computed money helpers; `UNIQUE(orderId, productId)`; optional `idempotencyKey` with `UNIQUE(userId, idempotencyKey)`; DB CHECKs including `lineTotal = unitPrice × quantity`, all-or-none delivery snapshots, and E.164 `customerPhone`; `OrderRepository` (`createWithLines`, `findById`, `findOwnedById`); ADR 0013; `instructions/orders.md`. No HTTP, payment models, or Inventory orchestration. Manager/profile-region and other deferred snapshots remain out of scope.
 
 ### ORD-02A — Order state machine and authorization matrix
 
@@ -589,7 +610,7 @@ Acceptance criteria: Duplicate requests yield one logical order; SKU locks use d
 
 Explicitly out of scope: Asynchronous side effects and payment collection. Customer create/list/detail HTTP (ORD-03A/ORD-04), Admin HTTP (ORD-06), returns, and payments.
 
-Delivered: `OrderCreationService.createOrder` (no HTTP) in one REPEATABLE READ transaction — create idempotency advisory lock, PRC-05 `priceOrderLines`, trusted snapshot persistence (`createWithTrustedSnapshots`), `reserveForOrder`; bounded retry on RR serialization failures; inactive User/Region rejected; Order/OrderLine migration for discounted money + applied-discount evidence + `pricingEvaluatedAt` + payload hash; unit + PostgreSQL integration/concurrency specs (live `TEST_DATABASE_URL` run environment-dependent). Security/concurrency/migration reviews recorded in task handoff.
+Delivered: `OrderCreationService.createOrder` (no HTTP) in one REPEATABLE READ transaction — create idempotency advisory lock, PRC-05 `priceOrderLines`, locked complete StoreProfile read, trusted customer/region/delivery snapshot persistence (`createWithTrustedSnapshots`), `reserveForOrder`; bounded retry on RR serialization failures; missing/incomplete profiles reject with `STORE_PROFILE_REQUIRED`; inactive User/Region rejected; unit + PostgreSQL integration/concurrency specs. Security/concurrency/migration reviews recorded in task handoff.
 
 Checkpoint finding (2026-08-24): the actual service passes the outer transaction to Pricing, Order persistence, and Inventory, but its User and Region repository reads currently use their default clients. Preserve ORD-03 history; ORD-03A must close this authoritative-read transaction-context gap before exposing customer create HTTP.
 
@@ -603,7 +624,7 @@ Acceptance criteria: User, Region, Product, Discount, Commerce policy, Order, di
 
 Explicitly out of scope: Order list/detail (ORD-04), cancellation/transitions, policy or discount-usage persistence, and frontend behavior.
 
-Delivered: `POST /api/v1/orders` (`Orders_create`) with `AccessTokenGuard` + `requireCustomerOwnerId` (USER only; Admin → `AUTH_FORBIDDEN`); body `{ regionId, lines }` only; required UUID `Idempotency-Key`; principal-bound USER actor; `201` create / `200` replay; `Cache-Control: no-store`; User/Region reads join ORD-03 RR `TransactionContext`; OpenAPI + unit/e2e/PostgreSQL coverage. Cookie-authenticated browser requests are protected by the completed AUTH-10 CSRF guard. No schema migration.
+Delivered: `POST /api/v1/orders` (`Orders_create`) with `AccessTokenGuard` + `requireCustomerOwnerId` (USER only; Admin → `AUTH_FORBIDDEN`); body `{ regionId, lines }` only; required UUID `Idempotency-Key`; principal-bound USER actor; complete StoreProfile required for new orders with stable `409 STORE_PROFILE_REQUIRED`; immutable delivery snapshot persisted in the same RR transaction; `201` create / `200` replay; `Cache-Control: no-store`; User/Region/Profile reads join the transaction context; OpenAPI + unit/e2e/PostgreSQL coverage. Cookie-authenticated browser requests are protected by the completed AUTH-10 CSRF guard.
 
 ### ORD-04 — Customer order list and detail
 
@@ -639,7 +660,7 @@ Acceptance criteria: Filters/sorts are allowlisted and indexed; transition confl
 
 Explicitly out of scope: Bulk operations, dispatch board, and returns.
 
-Delivered: Permissioned `GET /api/v1/admin/orders` and `GET /api/v1/admin/orders/:id` plus explicit `confirm`, `cancel`, `ship`, and `deliver` commands. Admin list filters/sorts are strictly allowlisted with bounded pagination and stable `id` tie-break ordering; rows and details use persisted snapshots and omit internal idempotency/commerce metadata. `ORDER_READ` and `ORDER_TRANSITION` are enforced by the central guards, with WAREHOUSE read-only and ORDER_OPS/SUPER_ADMIN operational access. Commands delegate to ORD-02 for conditional transitions, replay idempotency, lifecycle timestamps, DLU/Inventory transaction orchestration, and stable errors. All Admin Order reads/mutations are no-store. Cookie-authenticated browser requests are protected by the completed AUTH-10 CSRF guard. Unit/lightweight HTTP/OpenAPI and live PostgreSQL concurrency verification are complete.
+Delivered: Permissioned `GET /api/v1/admin/orders` and `GET /api/v1/admin/orders/:id` plus explicit `confirm`, `cancel`, `ship`, and `deliver` commands. Admin list filters/sorts are strictly allowlisted with bounded pagination and stable `id` tie-break ordering; rows include nullable immutable delivery coordinates and details include the full persisted delivery snapshot; responses omit internal idempotency/commerce metadata. `ORDER_READ` and `ORDER_TRANSITION` are enforced by the central guards, with WAREHOUSE read-only and ORDER_OPS/SUPER_ADMIN operational access. Commands delegate to ORD-02 for conditional transitions, replay idempotency, lifecycle timestamps, DLU/Inventory transaction orchestration, and stable errors. All Admin Order reads/mutations are no-store. Cookie-authenticated browser requests are protected by the completed AUTH-10 CSRF guard. Unit/lightweight HTTP/OpenAPI and live PostgreSQL verification are complete.
 
 ### ORD-07 — Returns, bulk transitions, and dispatch board
 
@@ -653,7 +674,7 @@ Acceptance criteria: Partial/batch failure semantics and authorization are expli
 
 Explicitly out of scope: Inventing refund, carrier, or physical-return rules; inventing discount-entitlement restoration; customer return initiation; RETURNED customer notifications; settlement mutation; `ORDER_RETURN` / `DISPATCH_READ` permissions; bulk CONFIRM/CANCEL/RETURN; persisted Dispatch domain.
 
-Delivered (Slices 1–5, verified): Accepted [ADR 0024](adr/0024-order-returns-bulk-transitions-and-dispatch-board.md); durable policy in `instructions/orders.md`, `instructions/inventory.md`, and authorization notes. Slice 1 return persistence (`OrderReturn`/`OrderReturnLine`, sellable/damaged quantities, idempotency payload proof, cumulative-quantity primitives, nullable `Order.returnedAt`); Slice 2 transactional Admin return recording (DELIVERED-only, cumulative cap, sellable-only `returnToStock`, idempotent replay/conflict); Slice 3 explicit `DELIVERED -> RETURNED` completion (first-writer `returnedAt` plus one atomic `order.returned` AuditLog fact, replay-safe); Slice 4 bounded (50) partial-success bulk SHIP/DELIVER with per-order transactions over HTTP 200 and no bulk AuditLog action; Slice 5 Admin Dispatch read model (`GET /api/v1/admin/orders/dispatch`, `ORDER_READ` only, CONFIRMED/SHIPPED, Region grouping, deterministic nulls-last ordering, 100-order bound with explicit truncation metadata). No DLU/settlement/pricing mutation, no `ORDER_RETURN`/`DISPATCH_READ` permissions, no refund/carrier/customer-initiation logic. Unit, focused real-PostgreSQL, E2E, and OpenAPI/typecheck/lint/build gates verified.
+Delivered (Slices 1–5, verified): Accepted [ADR 0024](adr/0024-order-returns-bulk-transitions-and-dispatch-board.md); durable policy in `instructions/orders.md`, `instructions/inventory.md`, and authorization notes. Slice 1 return persistence (`OrderReturn`/`OrderReturnLine`, sellable/damaged quantities, idempotency payload proof, cumulative-quantity primitives, nullable `Order.returnedAt`); Slice 2 transactional Admin return recording (DELIVERED-only, cumulative cap, sellable-only `returnToStock`, idempotent replay/conflict); Slice 3 explicit `DELIVERED -> RETURNED` completion (first-writer `returnedAt` plus one atomic `order.returned` AuditLog fact, replay-safe); Slice 4 bounded (50) partial-success bulk SHIP/DELIVER with per-order transactions over HTTP 200 and no bulk AuditLog action; Slice 5 Admin Dispatch read model (`GET /api/v1/admin/orders/dispatch`, `ORDER_READ` only, CONFIRMED/SHIPPED, Region grouping, immutable nullable delivery coordinates, deterministic nulls-last ordering, 100-order bound with explicit truncation metadata). No DLU/settlement/pricing mutation, no `ORDER_RETURN`/`DISPATCH_READ` permissions, no refund/carrier/customer-initiation logic. Unit, focused real-PostgreSQL, E2E, and OpenAPI/typecheck/lint/build gates verified.
 
 ### ORD-08 — Order audit, concurrency, and load verification
 
@@ -1068,7 +1089,7 @@ Scope: Implement legacy-compatible store/customer list and detail views with exp
 
 Acceptance criteria: Sensitive fields are purpose-limited; N+1/index behavior is reviewed; cross-record ownership and admin scopes are tested and documented.
 
-Delivered: Read-only `GET /api/v1/admin/customers` and `GET /api/v1/admin/customers/:id` over the existing `User` identity, with `CUSTOMER_READ` authorization (`SUPER_ADMIN`/`ORDER_OPS`), phone-substring search, explicit `isActive`/`hasReferral` filters, allowlisted `createdAt`/`updatedAt` sorting with stable `id` tie-breaks, minimized DTOs, immutable REF-02 Visitor attribution evidence, `CUSTOMER_NOT_FOUND`, `Cache-Control: no-store`, OpenAPI, unit/E2E/PostgreSQL coverage, and a joined referral read avoiding N+1 fan-out. No credential mutation, separate Store entity, schema migration, referral mutation, or unapproved business-profile semantics.
+Delivered: Read-only `GET /api/v1/admin/customers` and `GET /api/v1/admin/customers/:id` over the existing `User` identity, with `CUSTOMER_READ` authorization (`SUPER_ADMIN`/`ORDER_OPS`), phone-substring search, explicit `isActive`/`hasReferral` filters, allowlisted `createdAt`/`updatedAt` sorting with stable `id` tie-breaks, minimized DTOs, immutable REF-02 Visitor attribution evidence, StoreProfile status/list fields and full detail profile, `CUSTOMER_NOT_FOUND`, `Cache-Control: no-store`, OpenAPI, unit/E2E/PostgreSQL coverage, and one joined read avoiding N+1 fan-out. No credential mutation, separate Store entity, referral mutation, or unapproved multi-store/address-book semantics.
 
 Explicitly out of scope: Editing identity credentials and defining store business semantics not evidenced by legacy behavior.
 
@@ -1697,10 +1718,10 @@ The following are not implementation assumptions:
 - CSRF mechanism details for browser cookie-authenticated mutations, including Admin cookie auth, are implemented and verified by `AUTH-10` under the architecture accepted in `AUTH-09`. Admin login identifier is settled as canonical email (ADM-00 / ADR 0008). Admin password policy for creation/bootstrap is length-oriented (min 12 / max 128); breach-corpus rejection and rotation remain deferred. Admin identity persistence and `PrismaAdminRoleResolver` are DONE (ADM-00). Admin sessions, login HTTP, ADMIN token issuance, namespaced cookies, and operator-controlled first-`SUPER_ADMIN` provisioning are DONE (`ADM-AUTH-01` / ADR 0009). `ADM-01` (account management) depends on ADM-AUTH-01 so disablement can revoke Admin sessions. Permissioned Admin catalog routes (CAT-02) already attach `AccessTokenGuard` + `PermissionGuard`; ADM-01 still owes the same for Admin account-management routes.
 - Legacy capability evidence for the `WAREHOUSE` and `ORDER_OPS` permission grants (MIG-01). The AUTH-08 grants are provisional; widening or narrowing them is a reviewed policy change.
 - Trusted reverse-proxy / Nest Express `trust proxy` configuration so OTP IP rate limits see the real client behind Liara; live Kavenegar credential smoke test when account access exists (deploy).
-- Customer/store business profile fields required at registration vs later completion (store name, manager name, address, region, coordinates): no in-repo legacy inventory yet (`MIG-01`); AUTH-07 shipped Pattern A phone-only identity with empty profile update allowlist. Region **reference** rows exist (CAT-02); profile `regionId` FK remains deferred.
+- Customer/store business profile fields required at registration vs later completion: AUTH-07 remains phone-only at OTP completion; STORE-02/03 implement later StoreProfile completion for store name, address, and coordinates. Manager name and profile `regionId` FK remain deferred. Region **reference** rows exist (CAT-02).
 - Category/Region legacy parity gaps (MIG-01): name uniqueness, public slug, sortOrder, category hierarchy/parent, shipping-related Region fields, and whether hard delete is ever allowed after Product/profile FKs land.
 - Product legacy parity gaps (MIG-01): SKU/code uniqueness, description, unit/package semantics, whether zero-price products should be allowed, and whether product name uniqueness is ever required. Product image attachment is decided in ADR 0022 (exactly one optional `imageMediaId`; no gallery); MED-01 implements it.
-- Order transition runtime (ORD-02), customer create/read HTTP (`ORD-03A`/`ORD-04`), customer cancellation HTTP (`ORD-05`), and Admin Orders HTTP (`ORD-06`) are DONE. V1 state machine, actors, concurrency, and Inventory orchestration rules are settled in ADR 0014 / [instructions/orders.md](../instructions/orders.md). Return/bulk/dispatch architecture is decided in [ADR 0024](adr/0024-order-returns-bulk-transitions-and-dispatch-board.md) / ORD-07 (Human gate closed; implementation DONE). Shipping/address snapshot fields and payment/refund semantics remain deferred. Optional customer checkout note (`customerNote`) ownership is `ORD-09` (DONE; before Storefront checkout). Deferred settlement is separately planned in SET-01/SET-02 and must not become Order state.
+- Order transition runtime (ORD-02), customer create/read HTTP (`ORD-03A`/`ORD-04`), customer cancellation HTTP (`ORD-05`), and Admin Orders HTTP (`ORD-06`) are DONE. V1 state machine, actors, concurrency, Inventory orchestration, StoreProfile gate, and delivery snapshot rules are settled in ADR 0014 / [instructions/orders.md](../instructions/orders.md). Return/bulk/dispatch architecture is decided in [ADR 0024](adr/0024-order-returns-bulk-transitions-and-dispatch-board.md) / ORD-07 (Human gate closed; implementation DONE). Manager/profile-region, payment, and refund semantics remain deferred. Optional customer checkout note (`customerNote`) ownership is `ORD-09` (DONE; before Storefront checkout). Deferred settlement is separately planned in SET-01/SET-02 and must not become Order state.
 - Whether a future `PACKED`/`PICKED` state should move the physical `onHand` decrement earlier than `SHIPPED`.
 - Whether partial fulfillment or split shipment is ever allowed after V1.
 - Public exposure of exact inventory `available`, and any preferred-customer allocation/fairness policy under contention.

@@ -17,6 +17,15 @@ export interface AdminCustomerReferralView {
   attributedAt: Date;
 }
 
+export interface AdminCustomerStoreProfileView {
+  storeName: string;
+  address: string;
+  latitude: number;
+  longitude: number;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 export interface AdminCustomerRecord {
   id: string;
   phone: string;
@@ -24,6 +33,9 @@ export interface AdminCustomerRecord {
   createdAt: Date;
   updatedAt: Date;
   referral: AdminCustomerReferralView | null;
+  storeName: string | null;
+  hasCompleteStoreProfile: boolean;
+  storeProfile: AdminCustomerStoreProfileView | null;
 }
 
 export interface AdminCustomerListQuery {

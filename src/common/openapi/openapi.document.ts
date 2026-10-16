@@ -44,6 +44,7 @@ import {
 import { CreateRegionBodyDto } from '../../modules/regions/api/dto/create-region.dto';
 import { UpdateRegionBodyDto } from '../../modules/regions/api/dto/update-region.dto';
 import { CsrfTokenResponseDto } from '../../modules/auth/api/dto/csrf-response.dto';
+import { StoreProfileResponseDto } from '../../modules/users/api/dto/store-profile-response.dto';
 
 export function buildOpenApiConfig(
   appVersion: string,
@@ -151,6 +152,7 @@ export function createOpenApiDocument(app: INestApplication): OpenAPIObject {
       RequestOtpResponseDto,
       VerifyOtpResponseDto,
       UpdateUserProfileBodyDto,
+      StoreProfileResponseDto,
       PublicCategoryDto,
       PublicCategoryListResponseDto,
       AdminCategoryDto,

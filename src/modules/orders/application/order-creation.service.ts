@@ -20,6 +20,8 @@ import { normalizeOrderPricingLineInputs } from '../../pricing/domain/order-pric
 import type { OrderPricingSnapshot } from '../../pricing/domain/order-pricing';
 import { RegionRepository } from '../../regions/infrastructure/region.repository';
 import { UserRepository } from '../../users/infrastructure/user.repository';
+import { StoreProfileRepository } from '../../users/infrastructure/store-profile.repository';
+import type { StoreProfileRecord } from '../../users/domain/store-profile';
 import { assertUserActor } from '../domain/order-actor';
 import {
   hashOrderCreatePayload,
@@ -32,6 +34,7 @@ import {
   OrderInvalidProductError,
   OrderInvalidRegionError,
   OrderInvalidUserError,
+  StoreProfileRequiredError,
 } from '../domain/order-errors';
 import { OrderMessage } from '../domain/order-messages';
 import type { OrderRecord, TrustedCreateOrderInput } from '../domain/order';
@@ -62,6 +65,7 @@ export class OrderCreationService {
     private readonly discountUsage: DiscountUsageService,
     private readonly inventory: InventoryService,
     private readonly users: UserRepository,
+    private readonly storeProfiles: StoreProfileRepository,
     private readonly regions: RegionRepository,
     private readonly logger: ApplicationLogger,
     @Optional() private readonly audit?: AuditLogService,
@@ -202,6 +206,17 @@ export class OrderCreationService {
         throw new OrderInvalidUserError(OrderMessage.INVALID_USER);
       }
 
+      // The profile row is locked before any pricing or reservation side
+      // effects. Its four fields are copied together into the immutable Order
+      // snapshot, so a concurrent replacement cannot produce mixed values.
+      const storeProfile = await this.storeProfiles.findByUserIdForUpdate(
+        input.userId,
+        tx,
+      );
+      if (storeProfile === null || !isCompleteStoreProfile(storeProfile)) {
+        throw new StoreProfileRequiredError();
+      }
+
       const region = await this.regions.findById(input.regionId, tx);
       if (region === null || !region.isActive) {
         throw new OrderInvalidRegionError(OrderMessage.INVALID_REGION);
@@ -226,6 +241,7 @@ export class OrderCreationService {
         commercePolicyRevision: acceptance.revision,
         evaluatedAt: acceptance.evaluatedAt,
         priced,
+        storeProfile,
       });
 
       // Do not re-read inside this transaction after a unique violation:
@@ -302,12 +318,17 @@ export class OrderCreationService {
     commercePolicyRevision: number;
     evaluatedAt: Date;
     priced: OrderPricingSnapshot;
+    storeProfile: StoreProfileRecord;
   }): TrustedCreateOrderInput {
     return {
       userId: input.userId,
       customerPhone: input.customerPhone,
       regionId: input.regionId,
       regionName: input.regionName,
+      deliveryStoreName: input.storeProfile.storeName,
+      deliveryAddress: input.storeProfile.address,
+      deliveryLatitude: input.storeProfile.latitude,
+      deliveryLongitude: input.storeProfile.longitude,
       idempotencyKey: input.idempotencyKey,
       customerNote: input.customerNote,
       idempotencyPayloadHash: input.payloadHash,
@@ -372,6 +393,19 @@ export class OrderCreationService {
     }
     return new OrderInvalidInputError(OrderMessage.INVALID_INPUT);
   }
+}
+
+function isCompleteStoreProfile(profile: StoreProfileRecord): boolean {
+  return (
+    profile.storeName.trim().length > 0 &&
+    profile.address.trim().length > 0 &&
+    Number.isFinite(profile.latitude) &&
+    profile.latitude >= -90 &&
+    profile.latitude <= 90 &&
+    Number.isFinite(profile.longitude) &&
+    profile.longitude >= -180 &&
+    profile.longitude <= 180
+  );
 }
 
 function isSerializationFailure(error: unknown): boolean {

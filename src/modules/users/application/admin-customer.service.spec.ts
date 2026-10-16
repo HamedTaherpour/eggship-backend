@@ -15,6 +15,9 @@ function record(
     createdAt: now,
     updatedAt: now,
     referral: null,
+    storeName: null,
+    hasCompleteStoreProfile: false,
+    storeProfile: null,
     ...partial,
   };
 }

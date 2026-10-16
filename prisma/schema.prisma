@@ -101,6 +101,22 @@ model User {
   discountCustomerUsage DiscountCustomerUsage[]
   discountUsageRecords  DiscountUsageRecord[]
   referralAttribution   ReferralAttribution?
+  storeProfile          StoreProfile?
+}
+
+/// Customer/store delivery profile. One profile is allowed per User; profile
+/// writes are owned by the Users module and must not be folded into Auth.
+model StoreProfile {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @unique @db.Uuid
+  storeName String   @db.VarChar(160)
+  address   String   @db.VarChar(500)
+  latitude  Decimal  @db.Decimal(9, 6)
+  longitude Decimal  @db.Decimal(9, 6)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
 }
 
 /// Internal acquisition actor. Deactivation preserves code identity and history.
@@ -844,6 +860,11 @@ model Order {
   /// Region traceability + historical display name. Immutable after creation.
   regionId                         String        @db.Uuid
   regionName                       String        @db.VarChar(100)
+  /// Nullable for orders created before STORE-02 delivery snapshots existed.
+  deliveryStoreName                String?       @db.VarChar(160)
+  deliveryAddress                  String?       @db.VarChar(500)
+  deliveryLatitude                 Decimal?      @db.Decimal(9, 6)
+  deliveryLongitude                Decimal?      @db.Decimal(9, 6)
   /// Sum of gross line totals in integer Toman (BIGINT — may exceed int4).
   grossSubtotal                    BigInt
   /// Sum of line discount amounts in integer Toman.

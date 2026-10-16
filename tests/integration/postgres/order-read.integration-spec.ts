@@ -35,6 +35,10 @@ function trustedCreate(input: {
   region: RegionRecord;
   product: ProductRecord;
   quantity?: number;
+  deliveryLatitude?: number | null;
+  deliveryLongitude?: number | null;
+  deliveryStoreName?: string | null;
+  deliveryAddress?: string | null;
 }): TrustedCreateOrderInput {
   const quantity = input.quantity ?? 1;
   const gross = BigInt(input.product.price) * BigInt(quantity);
@@ -44,6 +48,10 @@ function trustedCreate(input: {
     customerPhone: input.user.phone,
     regionId: input.region.id,
     regionName: input.region.name,
+    deliveryStoreName: input.deliveryStoreName,
+    deliveryAddress: input.deliveryAddress,
+    deliveryLatitude: input.deliveryLatitude,
+    deliveryLongitude: input.deliveryLongitude,
     idempotencyKey,
     idempotencyPayloadHash: hashOrderCreatePayload({
       regionId: input.region.id,
@@ -227,5 +235,47 @@ describe('Order customer read queries (integration)', () => {
       unitPrice: 12_000,
     });
     expect(await orders.findOwnedById(created.id, randomUUID())).toBeNull();
+  });
+
+  it('returns immutable delivery coordinates in Admin list and detail reads', async () => {
+    const owner = await users.create({ phone: nextPhone() });
+    const region = await regions.create({ name: 'Tehran' });
+    const product = await seedProduct('Admin map eggs', 12_000);
+    const created = await orders.createWithTrustedSnapshots(
+      trustedCreate({
+        user: owner,
+        region,
+        product,
+        deliveryStoreName: 'Historical Store',
+        deliveryAddress: 'Historical Street',
+        deliveryLatitude: 35.6892,
+        deliveryLongitude: 51.389,
+      }),
+    );
+
+    await prisma.order.update({
+      where: { id: created.id },
+      data: { status: OrderStatus.CONFIRMED },
+    });
+
+    const page = await orders.listAdmin({
+      page: 1,
+      pageSize: 20,
+      sortBy: 'createdAt',
+      sortOrder: 'desc',
+      status: OrderStatus.CONFIRMED,
+    });
+    expect(page.items[0]).toMatchObject({
+      id: created.id,
+      deliveryLatitude: 35.6892,
+      deliveryLongitude: 51.389,
+    });
+
+    await expect(orders.findById(created.id)).resolves.toMatchObject({
+      deliveryStoreName: 'Historical Store',
+      deliveryAddress: 'Historical Street',
+      deliveryLatitude: 35.6892,
+      deliveryLongitude: 51.389,
+    });
   });
 });

@@ -41,7 +41,7 @@ export class UsersController {
       'Derives the target user exclusively from the authenticated principal.',
       'Never accepts userId from the body or query.',
       'Customer subjects only: an authenticated non-customer subject is rejected with 403.',
-      'AUTH-07 allowlist has no mutable business fields yet (MIG-01 evidence pending).',
+      "Requires all StoreProfile fields together and replaces the authenticated customer's profile.",
       'Phone identity, isActive, and security fields cannot be changed here.',
       'Address/profile mutations must not rewrite future Order shipping snapshots',
       '(Orders capture immutable snapshots at creation time).',
@@ -53,12 +53,7 @@ export class UsersController {
   @ApiBody({
     type: UpdateUserProfileBodyDto,
     description:
-      'Empty allowlisted object. Unknown properties are rejected. No mutable business fields in AUTH-07.',
-    schema: {
-      type: 'object',
-      additionalProperties: false,
-      properties: {},
-    },
+      'All StoreProfile fields are required together. Unknown properties are rejected.',
   })
   @ApiResponse({
     status: 200,
@@ -84,7 +79,6 @@ export class UsersController {
     @Req() request: Request,
     @Body() body: UpdateUserProfileBodyDto,
   ): Promise<CurrentUserResponseDto> {
-    void body;
     const principal = getAuthenticatedPrincipal(request);
     if (principal === undefined) {
       throw new AuthError(
@@ -93,7 +87,7 @@ export class UsersController {
       );
     }
 
-    const profile = await this.profiles.updateCurrentProfile(principal);
+    const profile = await this.profiles.updateCurrentProfile(principal, body);
     return {
       data: {
         user: {
@@ -101,6 +95,8 @@ export class UsersController {
           phone: profile.phone,
           isActive: profile.isActive,
           profileComplete: profile.profileComplete,
+          storeProfile: profile.storeProfile,
+          hasCompleteStoreProfile: profile.hasCompleteStoreProfile,
           createdAt: profile.createdAt.toISOString(),
           updatedAt: profile.updatedAt.toISOString(),
         },

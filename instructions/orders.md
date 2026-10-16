@@ -88,7 +88,7 @@ Customer read HTTP (ORD-04): `GET /api/v1/orders` (`Orders_list`) and `GET /api/
 
 Admin Order HTTP (ORD-06): `GET /api/v1/admin/orders`, `GET /api/v1/admin/orders/:id`, and explicit `POST` commands at `/confirm`, `/cancel`, `/ship`, and `/deliver`.
 
-- Admin list uses CAT-01 pagination with optional `status`, `regionId`, inclusive `createdFrom`/`createdTo`, and the explicit sort allowlist `createdAt`, `total`, `status`, `deliveryAt` (default `createdAt` descending with stable `id` tie-break). It intentionally has no free-text search and returns summary snapshots only.
+- Admin list uses CAT-01 pagination with optional `status`, `regionId`, inclusive `createdFrom`/`createdTo`, and the explicit sort allowlist `createdAt`, `total`, `status`, `deliveryAt` (default `createdAt` descending with stable `id` tie-break). It intentionally has no free-text search and returns summary snapshots plus nullable immutable delivery coordinates.
 - Admin reads and commands require `ORDER_READ` or `ORDER_TRANSITION`, respectively, through `AccessTokenGuard` + `PermissionGuard`. `ORDER_OPS` and `SUPER_ADMIN` can operate; `WAREHOUSE` is read-only; `USER` is forbidden.
 - Admin detail and mutation responses use persisted historical snapshots and include operational cancellation metadata, but omit idempotency payload/hash, commerce-policy metadata, Prisma entities, and infrastructure fields. All Admin Order responses are `Cache-Control: no-store`.
 - Admin command actor identity is derived from the authenticated Admin principal. Commands delegate to the ORD-02 transition service; they do not add a generic status update or a second state machine. Cookie-authenticated mutations remain subject to the shared AUTH-10 CSRF guard.
@@ -111,9 +111,9 @@ Flow in one RR transaction:
 1. Advisory-lock create idempotency scope `(userId, idempotencyKey)`
 2. Replay or conflict on existing Order for that key + payload hash
 3. Evaluate one coherent Commerce policy revision from the same REPEATABLE READ snapshot (COM-03)
-4. Resolve User phone / Region name **via the same opaque `TransactionContext`** (ORD-03A)
+4. Resolve User phone and lock the complete StoreProfile **via the same opaque `TransactionContext`** (ORD-03A / STORE-04/05). Missing or incomplete profile → HTTP 409 `STORE_PROFILE_REQUIRED`.
 5. Lock `DiscountCustomerUsage` rows for relevant PRODUCT discounts (`FOR UPDATE`, sorted `discountId`) and price with `remainingEligibleQuantity` (DLU-02 / [ADR 0017](../docs/adr/0017-discount-lifetime-quantity-limit.md))
-6. Persist trusted snapshots (including `discountedQuantity`), `commercePolicyRevision`, append CONSUME usage records, and update usage aggregates
+6. Persist trusted customer/region/pricing snapshots and all four delivery snapshot fields from the one locked StoreProfile row; append CONSUME usage records and update usage aggregates
 7. Reserve Inventory through `reserveForOrder(orderId, normalized lines, USER actor, tx)`
 8. Commit — status is always `PENDING_REVIEW`
 
@@ -368,7 +368,7 @@ Bulk supports **SHIP** and **DELIVER** only — not CONFIRM, CANCEL, or RETURN.
 - Within each group (and for the bounded global fetch): `deliveryAt` ASC with **nulls last**, then `createdAt` ASC, then `id` ASC.
 - Response includes a small operational **summary** (`ordersCount`, `confirmedCount`, `shippedCount`, `regionCount`) plus explicit bound metadata (`limit`, `truncated`, `matchedCount`).
 - V1 bound: **100** Orders (`ADMIN_DISPATCH_ORDER_LIMIT`, aligned with CAT-01 `MAX_PAGE_SIZE`). Truncation is never silent.
-- No carrier/GPS/route optimization; no new address fields. Shipping address snapshots remain deferred (MIG-01).
+- No carrier/GPS/route optimization. Dispatch includes nullable immutable delivery coordinates; orders without coordinates remain visible.
 
 ## `RETURNED` (canonical summary)
 
@@ -418,17 +418,19 @@ still subject to the shared AUTH-10 CSRF guard.
 - `InventoryReservation.orderId` remains an **opaque UUID** with **no FK** to `Order`.
 - V1 collapses duplicate `productId` lines before persistence: `UNIQUE(orderId, productId)` aligns with Inventory reservation identity.
 
-## Deferred snapshot extensions (MIG-01 / profile tasks)
+## Deferred snapshot extensions (MIG-01 / future profile tasks)
 
 No in-repo legacy Order contract exists yet (`MIG-01` PLANNED). The following remain explicitly deferred rather than invented:
 
-- Shipping/delivery **address** snapshot columns (User profile address fields do not exist — AUTH-07 is phone-only).
-- Store name, manager name, coordinates, and profile `regionId` FK.
+- Manager name and profile `regionId` FK remain deferred. Store name, address, latitude, and longitude are implemented by StoreProfile and the nullable Order delivery snapshot.
 - Human-readable order numbers/codes.
 - Order notes, invoice metadata.
 - Order-level payment/settlement snapshot columns (approved deferred-settlement tracking lives in the separate Settlement module instead — [settlement.md](settlement.md), [ADR 0018](../docs/adr/0018-deferred-settlement-lifecycle.md)).
 
-When profile/address support lands, Orders must snapshot address at creation — **never reference a mutable User address directly** for historical display.
+Legacy Orders may have all four delivery snapshot fields null; they are not
+backfilled and must never fall back to the current StoreProfile. New Orders
+snapshot all four values from the same locked profile row. Exact coordinates are
+available only to the authenticated owner and authorized Admin APIs.
 
 ## Module layout
 

@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Add authenticated customer StoreProfile read and update APIs for STORE-03.
+- Add additive StoreProfile persistence and nullable Order delivery snapshot columns for STORE-02.
+- Require a complete StoreProfile for new orders and persist an immutable delivery snapshot for STORE-04/05.
+- Extend Admin customer, order, and dispatch read APIs with StoreProfile and immutable delivery-location data for STORE-06.
+- Complete STORE-07 verification, regenerate the OpenAPI artifact, and document the staged production rollout and compatibility gate for StoreProfile-required ordering.
+
 - Correct Admin analytics monetary OpenAPI schemas to expose exact integer-Toman
   number-or-decimal-string values, matching runtime serialization.
 

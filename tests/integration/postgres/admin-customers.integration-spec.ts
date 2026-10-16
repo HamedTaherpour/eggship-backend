@@ -5,6 +5,7 @@ import { postgresIntegrationImports } from '../support/postgres-testing-module';
 import { assertDestructiveOperationsAllowed } from '../support/integration-environment';
 import { PrismaService } from '../../../src/infrastructure/database/prisma/prisma.service';
 import { UserRepository } from '../../../src/modules/users/infrastructure/user.repository';
+import { StoreProfileRepository } from '../../../src/modules/users/infrastructure/store-profile.repository';
 import { AdminCustomerRepository } from '../../../src/modules/users/infrastructure/admin-customer.repository';
 import { VisitorRepository } from '../../../src/modules/visitors/infrastructure/visitor.repository';
 import { UsersModule } from '../../../src/modules/users/users.module';
@@ -27,6 +28,7 @@ describe('Admin customer/store reads (integration, ADM-02)', () => {
   let app: INestApplicationContext;
   let prisma: PrismaService;
   let users: UserRepository;
+  let storeProfiles: StoreProfileRepository;
   let adminCustomers: AdminCustomerRepository;
   let visitors: VisitorRepository;
   let phoneCounter = 1000;
@@ -45,6 +47,7 @@ describe('Admin customer/store reads (integration, ADM-02)', () => {
     app = moduleRef;
     prisma = moduleRef.get(PrismaService);
     users = moduleRef.get(UserRepository);
+    storeProfiles = moduleRef.get(StoreProfileRepository);
     adminCustomers = moduleRef.get(AdminCustomerRepository);
     visitors = moduleRef.get(VisitorRepository);
     await app.init();
@@ -60,6 +63,12 @@ describe('Admin customer/store reads (integration, ADM-02)', () => {
     const plain = await users.create({ phone: uniquePhone(phoneCounter++) });
     const referredUser = await users.create({
       phone: uniquePhone(phoneCounter++),
+    });
+    await storeProfiles.create(referredUser.id, {
+      storeName: 'Referred Store',
+      address: 'Market Street',
+      latitude: 35.6892,
+      longitude: 51.389,
     });
     const visitor = await visitors.create({
       name: `Promoter ${randomUUID().slice(0, 8)}`,
@@ -83,8 +92,16 @@ describe('Admin customer/store reads (integration, ADM-02)', () => {
       visitorId: visitor.id,
       referralCode: visitor.referralCode,
     });
+    expect(referred).toMatchObject({
+      storeName: 'Referred Store',
+      hasCompleteStoreProfile: true,
+    });
     const unreferred = all.items.find((item) => item.id === plain.id);
     expect(unreferred?.referral).toBeNull();
+    expect(unreferred).toMatchObject({
+      storeName: null,
+      hasCompleteStoreProfile: false,
+    });
 
     const onlyReferred = await adminCustomers.list({
       page: 1,
@@ -145,6 +162,12 @@ describe('Admin customer/store reads (integration, ADM-02)', () => {
       visitorId: visitor.id,
       referralCode: visitor.referralCode,
     });
+    await storeProfiles.create(user.id, {
+      storeName: 'Detail Store',
+      address: 'Detail Street',
+      latitude: 36.2605,
+      longitude: 59.6168,
+    });
 
     const detail = await adminCustomers.findById(user.id);
     expect(detail).not.toBeNull();
@@ -155,6 +178,13 @@ describe('Admin customer/store reads (integration, ADM-02)', () => {
       visitorName: visitor.name,
       referralCode: visitor.referralCode,
     });
+    expect(detail?.storeProfile).toMatchObject({
+      storeName: 'Detail Store',
+      address: 'Detail Street',
+      latitude: 36.2605,
+      longitude: 59.6168,
+    });
+    expect(detail?.hasCompleteStoreProfile).toBe(true);
     expect(
       (detail as unknown as Record<string, unknown>)['passwordHash'],
     ).toBeUndefined();

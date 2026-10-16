@@ -1,5 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsOptional, IsString, IsUUID, MaxLength } from 'class-validator';
+import { StoreProfileResponseDto } from '../../../users/api/dto/store-profile-response.dto';
 
 export class CompleteAuthBodyDto {
   @ApiProperty({
@@ -45,8 +46,7 @@ export class CompleteAuthDataDto {
     example: true,
     description: [
       'AUTH-07 identity profile is phone-only and complete once a User exists.',
-      'Mutable business profile fields (store name, address, region, etc.) are deferred',
-      'until evidenced by legacy inventory (MIG-01); this flag will be revised then.',
+      'StoreProfile completion is reported separately by the authenticated /auth/me response.',
     ].join(' '),
   })
   profileComplete!: boolean;
@@ -83,6 +83,19 @@ export class CurrentUserDto {
       'Identity profile completeness for AUTH-07 (phone-only). Business fields deferred.',
   })
   profileComplete!: boolean;
+
+  @ApiProperty({
+    type: StoreProfileResponseDto,
+    nullable: true,
+    description: 'The authenticated customer store profile, when completed.',
+  })
+  storeProfile!: StoreProfileResponseDto | null;
+
+  @ApiProperty({
+    example: false,
+    description: 'Whether all required StoreProfile fields are persisted.',
+  })
+  hasCompleteStoreProfile!: boolean;
 
   @ApiProperty({
     example: '2026-08-20T12:00:00.000Z',

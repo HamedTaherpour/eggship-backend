@@ -129,6 +129,8 @@ describe('OrderReadService', () => {
           total: 20_000n,
           lineCount: 1,
           deliveryAt: null,
+          deliveryLatitude: null,
+          deliveryLongitude: null,
           confirmedAt: new Date('2026-08-22T10:00:00.000Z'),
           shippedAt: null,
           createdAt: new Date('2026-08-22T10:00:00.000Z'),

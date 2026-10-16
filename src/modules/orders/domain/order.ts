@@ -29,6 +29,12 @@ export interface OrderRecord {
   customerNote?: string | null;
   regionId: string;
   regionName: string;
+  // Legacy in-memory/domain fixtures may omit fields; persistence mappings
+  // always normalize them to null for historical orders.
+  deliveryStoreName?: string | null;
+  deliveryAddress?: string | null;
+  deliveryLatitude?: number | null;
+  deliveryLongitude?: number | null;
   grossSubtotal: bigint;
   lineDiscountTotal: bigint;
   subtotalAfterLineDiscounts: bigint;
@@ -80,6 +86,10 @@ export interface TrustedCreateOrderInput {
   customerNote?: string | null;
   regionId: string;
   regionName: string;
+  deliveryStoreName?: string | null;
+  deliveryAddress?: string | null;
+  deliveryLatitude?: number | null;
+  deliveryLongitude?: number | null;
   idempotencyKey: string;
   idempotencyPayloadHash: string;
   pricingEvaluatedAt: Date;

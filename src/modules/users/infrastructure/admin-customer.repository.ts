@@ -5,6 +5,7 @@ import { PrismaService } from '../../../infrastructure/database/prisma/prisma.se
 import type {
   AdminCustomerListQuery,
   AdminCustomerRecord,
+  AdminCustomerStoreProfileView,
   AdminCustomerSortField,
 } from '../domain/customer-admin';
 
@@ -22,6 +23,14 @@ type PrismaAdminCustomerRow = {
       name: string;
       isActive: boolean;
     };
+  } | null;
+  storeProfile: {
+    storeName: string;
+    address: string;
+    latitude: Prisma.Decimal;
+    longitude: Prisma.Decimal;
+    createdAt: Date;
+    updatedAt: Date;
   } | null;
 };
 
@@ -41,6 +50,7 @@ const adminCustomerInclude = {
       },
     },
   },
+  storeProfile: true,
 } as const;
 
 /**
@@ -110,6 +120,18 @@ export function buildAdminCustomerWhere(
 
 function mapAdminCustomer(row: PrismaAdminCustomerRow): AdminCustomerRecord {
   const attribution = row.referralAttribution;
+  const profile = row.storeProfile;
+  const storeProfile: AdminCustomerStoreProfileView | null =
+    profile === null
+      ? null
+      : {
+          storeName: profile.storeName,
+          address: profile.address,
+          latitude: profile.latitude.toNumber(),
+          longitude: profile.longitude.toNumber(),
+          createdAt: profile.createdAt,
+          updatedAt: profile.updatedAt,
+        };
   return {
     id: row.id,
     phone: row.phone,
@@ -126,5 +148,8 @@ function mapAdminCustomer(row: PrismaAdminCustomerRow): AdminCustomerRecord {
             referralCode: attribution.referralCode,
             attributedAt: attribution.attributedAt,
           },
+    storeName: storeProfile?.storeName ?? null,
+    hasCompleteStoreProfile: storeProfile !== null,
+    storeProfile,
   };
 }

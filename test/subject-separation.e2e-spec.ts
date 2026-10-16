@@ -126,7 +126,12 @@ describe('USER / ADMIN subject separation (e2e)', () => {
           'Authorization',
           `Bearer ${signAccessToken(AuthSubjectType.ADMIN)}`,
         )
-        .send({})
+        .send({
+          storeName: 'Unauthorized Store',
+          address: 'Unauthorized Address',
+          latitude: 35,
+          longitude: 51,
+        })
         .expect(403);
 
       expect(response.body).toMatchObject({

@@ -58,6 +58,10 @@ type PrismaOrderWithLines = {
   customerNote: string | null;
   regionId: string;
   regionName: string;
+  deliveryStoreName: string | null;
+  deliveryAddress: string | null;
+  deliveryLatitude: Prisma.Decimal | null;
+  deliveryLongitude: Prisma.Decimal | null;
   grossSubtotal: bigint;
   lineDiscountTotal: bigint;
   subtotalAfterLineDiscounts: bigint;
@@ -257,6 +261,8 @@ export class OrderRepository {
           regionName: true,
           total: true,
           deliveryAt: true,
+          deliveryLatitude: true,
+          deliveryLongitude: true,
           createdAt: true,
         },
       }),
@@ -290,6 +296,8 @@ export class OrderRepository {
           regionName: true,
           total: true,
           deliveryAt: true,
+          deliveryLatitude: true,
+          deliveryLongitude: true,
           confirmedAt: true,
           shippedAt: true,
           createdAt: true,
@@ -476,6 +484,7 @@ export class OrderRepository {
       await db.$executeRaw(Prisma.sql`
         INSERT INTO "Order" (
           "id", "userId", "status", "customerPhone", "regionId", "regionName",
+          "deliveryStoreName", "deliveryAddress", "deliveryLatitude", "deliveryLongitude",
           "customerNote",
           "grossSubtotal", "lineDiscountTotal", "subtotalAfterLineDiscounts",
           "orderDiscountAmount", "total", "pricingEvaluatedAt",
@@ -488,6 +497,8 @@ export class OrderRepository {
           ${orderId}::uuid, ${normalized.userId}::uuid,
           ${OrderStatus.PENDING_REVIEW}::"OrderStatus", ${normalized.customerPhone},
           ${normalized.regionId}::uuid, ${normalized.regionName},
+          ${normalized.deliveryStoreName}, ${normalized.deliveryAddress},
+          ${normalized.deliveryLatitude}, ${normalized.deliveryLongitude},
           ${normalized.customerNote},
           ${normalized.grossSubtotal}, ${normalized.lineDiscountTotal},
           ${normalized.subtotalAfterLineDiscounts}, ${normalized.orderDiscountAmount},
@@ -559,6 +570,7 @@ function normalizeTrustedCreateInput(
   const customerPhone = normalizeCustomerPhoneSnapshot(input.customerPhone);
   const regionName = normalizeRegionNameSnapshot(input.regionName);
   const customerNote = normalizeCustomerNote(input.customerNote);
+  const deliverySnapshot = normalizeDeliverySnapshot(input);
 
   if (
     typeof input.idempotencyPayloadHash !== 'string' ||
@@ -593,9 +605,64 @@ function normalizeTrustedCreateInput(
     regionId,
     customerPhone,
     regionName,
+    ...deliverySnapshot,
     customerNote,
     idempotencyKey,
     lines,
+  };
+}
+
+function normalizeDeliverySnapshot(input: TrustedCreateOrderInput): {
+  deliveryStoreName: string | null;
+  deliveryAddress: string | null;
+  deliveryLatitude: number | null;
+  deliveryLongitude: number | null;
+} {
+  const values = [
+    input.deliveryStoreName,
+    input.deliveryAddress,
+    input.deliveryLatitude,
+    input.deliveryLongitude,
+  ];
+  if (values.every((value) => value === undefined || value === null)) {
+    return {
+      deliveryStoreName: null,
+      deliveryAddress: null,
+      deliveryLatitude: null,
+      deliveryLongitude: null,
+    };
+  }
+  if (
+    typeof input.deliveryStoreName !== 'string' ||
+    typeof input.deliveryAddress !== 'string' ||
+    typeof input.deliveryLatitude !== 'number' ||
+    typeof input.deliveryLongitude !== 'number'
+  ) {
+    throw new OrderInvalidInputError(
+      'Delivery snapshot fields must be supplied together.',
+    );
+  }
+  const storeName = input.deliveryStoreName.trim();
+  const address = input.deliveryAddress.trim();
+  if (
+    storeName.length < 1 ||
+    storeName.length > 160 ||
+    address.length < 1 ||
+    address.length > 500 ||
+    !Number.isFinite(input.deliveryLatitude) ||
+    input.deliveryLatitude < -90 ||
+    input.deliveryLatitude > 90 ||
+    !Number.isFinite(input.deliveryLongitude) ||
+    input.deliveryLongitude < -180 ||
+    input.deliveryLongitude > 180
+  ) {
+    throw new OrderInvalidInputError('Delivery snapshot fields are invalid.');
+  }
+  return {
+    deliveryStoreName: storeName,
+    deliveryAddress: address,
+    deliveryLatitude: input.deliveryLatitude,
+    deliveryLongitude: input.deliveryLongitude,
   };
 }
 
@@ -673,6 +740,10 @@ function mapOrder(row: PrismaOrderWithLines): OrderRecord {
     customerNote: row.customerNote,
     regionId: row.regionId,
     regionName: row.regionName,
+    deliveryStoreName: row.deliveryStoreName,
+    deliveryAddress: row.deliveryAddress,
+    deliveryLatitude: row.deliveryLatitude?.toNumber() ?? null,
+    deliveryLongitude: row.deliveryLongitude?.toNumber() ?? null,
     grossSubtotal: row.grossSubtotal,
     lineDiscountTotal: row.lineDiscountTotal,
     subtotalAfterLineDiscounts: row.subtotalAfterLineDiscounts,
@@ -977,6 +1048,8 @@ function mapAdminDispatchOrderRecord(row: {
   regionName: string;
   total: bigint;
   deliveryAt: Date | null;
+  deliveryLatitude: Prisma.Decimal | null;
+  deliveryLongitude: Prisma.Decimal | null;
   confirmedAt: Date | null;
   shippedAt: Date | null;
   createdAt: Date;
@@ -996,6 +1069,8 @@ function mapAdminDispatchOrderRecord(row: {
     total: row.total,
     lineCount: row._count.lines,
     deliveryAt: row.deliveryAt,
+    deliveryLatitude: row.deliveryLatitude?.toNumber() ?? null,
+    deliveryLongitude: row.deliveryLongitude?.toNumber() ?? null,
     confirmedAt: row.confirmedAt,
     shippedAt: row.shippedAt,
     createdAt: row.createdAt,
@@ -1028,6 +1103,8 @@ function mapAdminOrderListRecord(row: {
   regionName: string;
   total: bigint;
   deliveryAt: Date | null;
+  deliveryLatitude: Prisma.Decimal | null;
+  deliveryLongitude: Prisma.Decimal | null;
   createdAt: Date;
 }): AdminOrderListRecord {
   return {
@@ -1038,6 +1115,8 @@ function mapAdminOrderListRecord(row: {
     regionName: row.regionName,
     total: row.total,
     deliveryAt: row.deliveryAt,
+    deliveryLatitude: row.deliveryLatitude?.toNumber() ?? null,
+    deliveryLongitude: row.deliveryLongitude?.toNumber() ?? null,
     createdAt: row.createdAt,
   };
 }

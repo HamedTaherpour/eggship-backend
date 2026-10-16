@@ -28,6 +28,10 @@ export class AdminOrderListItemDto {
     number | string;
   @ApiPropertyOptional({ format: 'date-time', nullable: true }) deliveryAt!:
     string | null;
+  @ApiPropertyOptional({ nullable: true, minimum: -90, maximum: 90 })
+  deliveryLatitude!: number | null;
+  @ApiPropertyOptional({ nullable: true, minimum: -180, maximum: 180 })
+  deliveryLongitude!: number | null;
   @ApiProperty({ format: 'date-time' }) createdAt!: string;
 }
 
@@ -60,6 +64,8 @@ export function toAdminOrderListItemDto(
     regionName: row.regionName,
     total: orderMoneyToJson(row.total),
     deliveryAt: row.deliveryAt?.toISOString() ?? null,
+    deliveryLatitude: row.deliveryLatitude ?? null,
+    deliveryLongitude: row.deliveryLongitude ?? null,
     createdAt: row.createdAt.toISOString(),
   };
 }

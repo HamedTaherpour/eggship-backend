@@ -30,6 +30,7 @@ import { OrderActorType } from '../../../src/modules/orders/domain/order-actor';
 import {
   OrderIdempotencyConflictError,
   OrderInvalidProductError,
+  StoreProfileRequiredError,
 } from '../../../src/modules/orders/domain/order-errors';
 import { OrdersModule } from '../../../src/modules/orders/orders.module';
 import { DiscountService } from '../../../src/modules/pricing/application/discount.service';
@@ -45,6 +46,7 @@ import { ProductsModule } from '../../../src/modules/products/products.module';
 import { RegionRepository } from '../../../src/modules/regions/infrastructure/region.repository';
 import type { UserRecord } from '../../../src/modules/users/domain/user';
 import { UserRepository } from '../../../src/modules/users/infrastructure/user.repository';
+import { StoreProfileRepository } from '../../../src/modules/users/infrastructure/store-profile.repository';
 import { UsersModule } from '../../../src/modules/users/users.module';
 import { assertDestructiveOperationsAllowed } from '../support/integration-environment';
 import { ConcurrencyGate } from '../support/concurrency-gate';
@@ -68,6 +70,7 @@ describe('Order creation (integration)', () => {
   let app: INestApplicationContext;
   let prisma: PrismaService;
   let users: UserRepository;
+  let storeProfiles: StoreProfileRepository;
   let regions: RegionRepository;
   let categories: CategoryRepository;
   let products: ProductRepository;
@@ -100,6 +103,7 @@ describe('Order creation (integration)', () => {
     app = moduleRef;
     prisma = moduleRef.get(PrismaService);
     users = moduleRef.get(UserRepository);
+    storeProfiles = moduleRef.get(StoreProfileRepository);
     regions = moduleRef.get(RegionRepository);
     categories = moduleRef.get(CategoryRepository);
     products = moduleRef.get(ProductRepository);
@@ -147,6 +151,17 @@ describe('Order creation (integration)', () => {
     return uniquePhone(phoneCounter + (Date.now() % 1_000_000));
   }
 
+  async function createUserWithProfile(): Promise<UserRecord> {
+    const user = await users.create({ phone: nextPhone() });
+    await storeProfiles.create(user.id, {
+      storeName: `Store ${user.id.slice(0, 8)}`,
+      address: 'Main Street 1',
+      latitude: 35.6892,
+      longitude: 51.389,
+    });
+    return user;
+  }
+
   async function seedBase(options?: {
     price?: number;
     onHand?: number;
@@ -156,7 +171,7 @@ describe('Order creation (integration)', () => {
     productId: string;
     categoryId: string;
   }> {
-    const user = await users.create({ phone: nextPhone() });
+    const user = await createUserWithProfile();
     const region = await regions.create({ name: `Region ${randomUUID()}` });
     const category = await categories.create({ name: `Cat ${randomUUID()}` });
     const product = await products.create({
@@ -220,6 +235,78 @@ describe('Order creation (integration)', () => {
       actorId: user.id,
       entityType: 'ORDER',
       metadata: null,
+    });
+  });
+
+  it('requires a profile and persists the trusted delivery snapshot', async () => {
+    const { user, regionId, productId } = await seedBase({ onHand: 10 });
+
+    const result = await creation.createOrder({
+      actor: { type: OrderActorType.USER, id: user.id },
+      regionId,
+      idempotencyKey: randomUUID(),
+      lines: [{ productId, quantity: 1 }],
+    });
+
+    expect(result.order.deliveryStoreName).toMatch(/^Store /);
+    expect(result.order.deliveryAddress).toBe('Main Street 1');
+    expect(result.order.deliveryLatitude).toBe(35.6892);
+    expect(result.order.deliveryLongitude).toBe(51.389);
+    await expect(
+      prisma.order.findUniqueOrThrow({ where: { id: result.order.id } }),
+    ).resolves.toMatchObject({
+      deliveryStoreName: result.order.deliveryStoreName,
+      deliveryAddress: result.order.deliveryAddress,
+    });
+
+    const profileless = await users.create({ phone: nextPhone() });
+    await expect(
+      creation.createOrder({
+        actor: { type: OrderActorType.USER, id: profileless.id },
+        regionId,
+        idempotencyKey: randomUUID(),
+        lines: [{ productId, quantity: 1 }],
+      }),
+    ).rejects.toBeInstanceOf(StoreProfileRequiredError);
+  });
+
+  it('keeps historical snapshots when the profile is replaced', async () => {
+    const { user, regionId, productId } = await seedBase({ onHand: 10 });
+    const first = await creation.createOrder({
+      actor: { type: OrderActorType.USER, id: user.id },
+      regionId,
+      idempotencyKey: randomUUID(),
+      lines: [{ productId, quantity: 1 }],
+    });
+
+    await storeProfiles.replaceForUser(user.id, {
+      storeName: 'Updated Store',
+      address: 'Second Street 2',
+      latitude: 36.2605,
+      longitude: 59.6168,
+    });
+    const second = await creation.createOrder({
+      actor: { type: OrderActorType.USER, id: user.id },
+      regionId,
+      idempotencyKey: randomUUID(),
+      lines: [{ productId, quantity: 1 }],
+    });
+
+    expect(first.order.deliveryStoreName).toMatch(/^Store /);
+    expect(first.order.deliveryAddress).toBe('Main Street 1');
+    expect(first.order.deliveryLatitude).toBe(35.6892);
+    expect(first.order.deliveryLongitude).toBe(51.389);
+    expect(second.order).toMatchObject({
+      deliveryStoreName: 'Updated Store',
+      deliveryAddress: 'Second Street 2',
+      deliveryLatitude: 36.2605,
+      deliveryLongitude: 59.6168,
+    });
+    await expect(
+      prisma.order.findUniqueOrThrow({ where: { id: first.order.id } }),
+    ).resolves.toMatchObject({
+      deliveryStoreName: first.order.deliveryStoreName,
+      deliveryAddress: first.order.deliveryAddress,
     });
   });
 
@@ -477,7 +564,7 @@ describe('Order creation (integration)', () => {
 
   it('competing orders for a hot SKU respect available stock', async () => {
     const { user, regionId, productId } = await seedBase({ onHand: 5 });
-    const other = await users.create({ phone: nextPhone() });
+    const other = await createUserWithProfile();
     const gate = new ConcurrencyGate(2);
 
     const settled = await Promise.allSettled([
@@ -523,7 +610,7 @@ describe('Order creation (integration)', () => {
   it('N-way hot-SKU order creation preserves Order, Inventory, and audit equations', async () => {
     const { regionId, productId } = await seedBase({ onHand: 5 });
     const actors = await Promise.all(
-      Array.from({ length: 8 }, () => users.create({ phone: nextPhone() })),
+      Array.from({ length: 8 }, () => createUserWithProfile()),
     );
     const gate = new ConcurrencyGate(actors.length);
     const settled = await Promise.allSettled(
@@ -581,7 +668,7 @@ describe('Order creation (integration)', () => {
   it('records real PostgreSQL serialization retry evidence under equivalent-key contention', async () => {
     const { regionId, productId } = await seedBase({ onHand: 20 });
     const actors = await Promise.all(
-      Array.from({ length: 20 }, () => users.create({ phone: nextPhone() })),
+      Array.from({ length: 20 }, () => createUserWithProfile()),
     );
     const gate = new ConcurrencyGate(20);
     const info = jest.spyOn(logger, 'info');

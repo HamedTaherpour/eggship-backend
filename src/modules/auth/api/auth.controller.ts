@@ -251,7 +251,7 @@ export class AuthController {
       'After cookies are set, future cookie-authenticated mutations require the',
       'shared CSRF contract enforced by AUTH-10.',
       'Pattern A: identity User is created without a separate registration form;',
-      'business profile fields are deferred pending legacy evidence (MIG-01).',
+      'StoreProfile completion remains a separate authenticated customer update.',
     ].join(' '),
   })
   @ApiBody({ type: CompleteAuthBodyDto })
@@ -390,6 +390,8 @@ export class AuthController {
           phone: profile.phone,
           isActive: profile.isActive,
           profileComplete: profile.profileComplete,
+          storeProfile: profile.storeProfile,
+          hasCompleteStoreProfile: profile.hasCompleteStoreProfile,
           createdAt: profile.createdAt.toISOString(),
           updatedAt: profile.updatedAt.toISOString(),
         },

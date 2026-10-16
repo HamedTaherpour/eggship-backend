@@ -251,6 +251,7 @@ export class OrdersController {
       'Clients must not submit userId, actor, phone, prices, product names, discount ids, totals, status, or commerce-policy fields.',
       'Requires a UUID `Idempotency-Key` header. Same USER + key + normalized payload replays the committed Order without a second reservation or discount-usage consumption.',
       'Same key with a materially different payload returns ORDER_IDEMPOTENCY_CONFLICT.',
+      'A new order requires a complete persisted StoreProfile; missing or incomplete data returns STORE_PROFILE_REQUIRED (409).',
       'Commerce-policy rejection does not poison the key: a later valid attempt with the same key may succeed.',
       'Duplicate productIds are normalized by summing quantities before minimum-quantity, discount, and inventory checks.',
       'Response uses Cache-Control: no-store.',
@@ -306,7 +307,7 @@ export class OrdersController {
   })
   @ApiConflictResponse({
     description: [
-      '`ORDER_IDEMPOTENCY_CONFLICT`, `ORDERING_CLOSED`,',
+      '`STORE_PROFILE_REQUIRED`, `ORDER_IDEMPOTENCY_CONFLICT`, `ORDERING_CLOSED`,',
       '`INVENTORY_INSUFFICIENT_STOCK`, or other Inventory reservation conflicts',
       'passthrough from the create path (for example `INVENTORY_RESERVATION_CONFLICT`).',
     ].join(' '),

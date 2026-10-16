@@ -39,6 +39,11 @@ import type {
   CreateUserInput,
   UserRecord,
 } from '../src/modules/users/domain/user';
+import type {
+  StoreProfileInput,
+  StoreProfileRecord,
+} from '../src/modules/users/domain/store-profile';
+import { StoreProfileRepository } from '../src/modules/users/infrastructure/store-profile.repository';
 import { UserRepository } from '../src/modules/users/infrastructure/user.repository';
 import {
   bootstrapBrowserCsrf,
@@ -115,6 +120,57 @@ class InMemoryAuthSessionRepository {
 
   clear(): void {
     this.sessions.clear();
+  }
+}
+
+class InMemoryStoreProfileRepository {
+  readonly profiles = new Map<string, StoreProfileRecord>();
+
+  findByUserId(userId: string): Promise<StoreProfileRecord | null> {
+    return Promise.resolve(this.profiles.get(userId) ?? null);
+  }
+
+  create(
+    userId: string,
+    input: StoreProfileInput,
+  ): Promise<StoreProfileRecord> {
+    const now = new Date();
+    const profile: StoreProfileRecord = {
+      id: randomUUID(),
+      userId,
+      storeName: input.storeName.trim(),
+      address: input.address.trim(),
+      latitude: input.latitude,
+      longitude: input.longitude,
+      createdAt: now,
+      updatedAt: now,
+    };
+    this.profiles.set(userId, profile);
+    return Promise.resolve(profile);
+  }
+
+  replaceForUser(
+    userId: string,
+    input: StoreProfileInput,
+  ): Promise<StoreProfileRecord> {
+    const current = this.profiles.get(userId);
+    if (current === undefined) {
+      return Promise.reject(new Error('StoreProfile missing (in-memory)'));
+    }
+    const profile: StoreProfileRecord = {
+      ...current,
+      storeName: input.storeName.trim(),
+      address: input.address.trim(),
+      latitude: input.latitude,
+      longitude: input.longitude,
+      updatedAt: new Date(),
+    };
+    this.profiles.set(userId, profile);
+    return Promise.resolve(profile);
+  }
+
+  clear(): void {
+    this.profiles.clear();
   }
 }
 
@@ -332,6 +388,7 @@ describe('auth complete + current user (e2e)', () => {
   let app: INestApplication;
   let users: InMemoryUserRepository;
   let sessions: InMemoryAuthSessionRepository;
+  let storeProfiles: InMemoryStoreProfileRepository;
   let otpStore: MemoryOtpStore;
   let grantStore: MemoryGrantStore;
   let csrf: BrowserCsrfSession;
@@ -339,6 +396,7 @@ describe('auth complete + current user (e2e)', () => {
   beforeAll(async () => {
     users = new InMemoryUserRepository();
     sessions = new InMemoryAuthSessionRepository();
+    storeProfiles = new InMemoryStoreProfileRepository();
     grantStore = new MemoryGrantStore();
     otpStore = new MemoryOtpStore(grantStore);
 
@@ -354,6 +412,8 @@ describe('auth complete + current user (e2e)', () => {
       })
       .overrideProvider(UserRepository)
       .useValue(users)
+      .overrideProvider(StoreProfileRepository)
+      .useValue(storeProfiles)
       .overrideProvider(AuthSessionRepository)
       .useValue(sessions)
       .overrideProvider(OTP_STORE)
@@ -377,6 +437,7 @@ describe('auth complete + current user (e2e)', () => {
 
   afterEach(() => {
     users.clear();
+    storeProfiles.clear();
     sessions.clear();
     otpStore.challenges.clear();
     otpStore.consumed.clear();
@@ -466,6 +527,8 @@ describe('auth complete + current user (e2e)', () => {
           phone: '+989121112233',
           isActive: true,
           profileComplete: true,
+          storeProfile: null,
+          hasCompleteStoreProfile: false,
         },
       },
     });
@@ -581,7 +644,7 @@ describe('auth complete + current user (e2e)', () => {
       });
   });
 
-  it('rejects unknown profile fields and accepts empty PATCH allowlist', async () => {
+  it('rejects unknown profile fields and updates the StoreProfile', async () => {
     const grantId = await requestAndVerify('09127778899');
     const complete = await browserRequest(
       request(app.getHttpServer() as Server).post('/api/v1/auth/complete'),
@@ -607,13 +670,81 @@ describe('auth complete + current user (e2e)', () => {
       csrf,
       [`${ACCESS_TOKEN_COOKIE_NAME}=${encodeURIComponent(access!)}`],
     )
-      .send({})
+      .send({
+        storeName: 'Central Store',
+        address: 'Main Street',
+        latitude: 35.6892,
+        longitude: 51.389,
+      })
       .expect(200)
       .expect((res) => {
+        const body = res.body as {
+          data: {
+            user: {
+              storeProfile: StoreProfileInput;
+            };
+          };
+        };
         expect(res.body).toMatchObject({
-          data: { user: { phone: '+989127778899', profileComplete: true } },
+          data: {
+            user: {
+              phone: '+989127778899',
+              profileComplete: true,
+              hasCompleteStoreProfile: true,
+              storeProfile: {
+                storeName: 'Central Store',
+                address: 'Main Street',
+                latitude: 35.6892,
+                longitude: 51.389,
+              },
+            },
+          },
+        });
+        expect(body.data.user.storeProfile).toEqual({
+          storeName: 'Central Store',
+          address: 'Main Street',
+          latitude: 35.6892,
+          longitude: 51.389,
         });
       });
+  });
+
+  it('requires all StoreProfile fields and validates coordinates', async () => {
+    const grantId = await requestAndVerify('09123334455');
+    const complete = await browserRequest(
+      request(app.getHttpServer() as Server).post('/api/v1/auth/complete'),
+      csrf,
+    )
+      .send({ verificationGrantId: grantId })
+      .expect(200);
+    const access = cookieValue(
+      complete.headers['set-cookie'],
+      ACCESS_TOKEN_COOKIE_NAME,
+    );
+    const authCookies = [
+      `${ACCESS_TOKEN_COOKIE_NAME}=${encodeURIComponent(access!)}`,
+    ];
+
+    await browserRequest(
+      request(app.getHttpServer() as Server).patch('/api/v1/users/me'),
+      csrf,
+      authCookies,
+    )
+      .send({ storeName: 'Incomplete' })
+      .expect(400);
+
+    await browserRequest(
+      request(app.getHttpServer() as Server).patch('/api/v1/users/me'),
+      csrf,
+      authCookies,
+    )
+      .send({
+        storeName: 'Invalid coordinates',
+        address: 'Main Street',
+        latitude: 91,
+        longitude: 51,
+      })
+      .expect(400);
   });
 
   it('rejects complete bodies that include phone', async () => {

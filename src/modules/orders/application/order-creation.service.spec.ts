@@ -24,6 +24,8 @@ import type { RegionRecord } from '../../regions/domain/region';
 import type { RegionRepository } from '../../regions/infrastructure/region.repository';
 import type { UserRecord } from '../../users/domain/user';
 import type { UserRepository } from '../../users/infrastructure/user.repository';
+import type { StoreProfileRecord } from '../../users/domain/store-profile';
+import type { StoreProfileRepository } from '../../users/infrastructure/store-profile.repository';
 import { OrderActorType } from '../domain/order-actor';
 import { hashOrderCreatePayload } from '../domain/order-create-idempotency';
 import type { OrderRecord } from '../domain/order';
@@ -33,6 +35,7 @@ import {
   OrderInvalidProductError,
   OrderInvalidRegionError,
   OrderInvalidUserError,
+  StoreProfileRequiredError,
 } from '../domain/order-errors';
 import { OrderStatus } from '../domain/order-status';
 import type { OrderRepository } from '../infrastructure/order.repository';
@@ -94,6 +97,22 @@ function region(overrides: Partial<RegionRecord> = {}): RegionRecord {
     id: REGION_ID,
     name: 'Tehran North',
     isActive: true,
+    createdAt: NOW,
+    updatedAt: NOW,
+    ...overrides,
+  };
+}
+
+function storeProfile(
+  overrides: Partial<StoreProfileRecord> = {},
+): StoreProfileRecord {
+  return {
+    id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaab',
+    userId: USER_ID,
+    storeName: 'Central Store',
+    address: 'Main Street 1',
+    latitude: 35.6892,
+    longitude: 51.389,
     createdAt: NOW,
     updatedAt: NOW,
     ...overrides,
@@ -216,6 +235,9 @@ describe('OrderCreationService', () => {
   >;
   let inventory: jest.Mocked<Pick<InventoryService, 'reserveForOrder'>>;
   let users: jest.Mocked<Pick<UserRepository, 'findById'>>;
+  let storeProfiles: jest.Mocked<
+    Pick<StoreProfileRepository, 'findByUserIdForUpdate'>
+  >;
   let regions: jest.Mocked<Pick<RegionRepository, 'findById'>>;
   let logger: jest.Mocked<Pick<ApplicationLogger, 'info'>>;
   let service: OrderCreationService;
@@ -257,6 +279,9 @@ describe('OrderCreationService', () => {
       }),
     };
     users = { findById: jest.fn().mockResolvedValue(user()) };
+    storeProfiles = {
+      findByUserIdForUpdate: jest.fn().mockResolvedValue(storeProfile()),
+    };
     regions = { findById: jest.fn().mockResolvedValue(region()) };
     logger = { info: jest.fn() };
     service = new OrderCreationService(
@@ -267,6 +292,7 @@ describe('OrderCreationService', () => {
       discountUsage as unknown as DiscountUsageService,
       inventory as unknown as InventoryService,
       users as unknown as UserRepository,
+      storeProfiles as unknown as StoreProfileRepository,
       regions as unknown as RegionRepository,
       logger as unknown as ApplicationLogger,
     );
@@ -317,6 +343,10 @@ describe('OrderCreationService', () => {
       REGION_ID,
       expect.objectContaining({ [TRANSACTION_CONTEXT_BRAND]: true }),
     );
+    expect(storeProfiles.findByUserIdForUpdate).toHaveBeenCalledWith(
+      USER_ID,
+      expect.objectContaining({ [TRANSACTION_CONTEXT_BRAND]: true }),
+    );
     expect(orders.createWithTrustedSnapshots).toHaveBeenCalledWith(
       expect.objectContaining({
         userId: USER_ID,
@@ -328,6 +358,10 @@ describe('OrderCreationService', () => {
         pricingEvaluatedAt: EVALUATED_AT,
         commercePolicyRevision: 1,
         appliedOrderDiscount: null,
+        deliveryStoreName: 'Central Store',
+        deliveryAddress: 'Main Street 1',
+        deliveryLatitude: 35.6892,
+        deliveryLongitude: 51.389,
       }),
       expect.anything(),
     );
@@ -670,6 +704,16 @@ describe('OrderCreationService', () => {
       }),
       expect.anything(),
     );
+  });
+
+  it('requires a complete store profile before pricing or reservation', async () => {
+    storeProfiles.findByUserIdForUpdate.mockResolvedValue(null);
+
+    await expect(create()).rejects.toBeInstanceOf(StoreProfileRequiredError);
+
+    expect(pricing.priceOrderLines).not.toHaveBeenCalled();
+    expect(orders.createWithTrustedSnapshots).not.toHaveBeenCalled();
+    expect(inventory.reserveForOrder).not.toHaveBeenCalled();
   });
 
   it('maps unavailable products to ORDER_INVALID_PRODUCT', async () => {

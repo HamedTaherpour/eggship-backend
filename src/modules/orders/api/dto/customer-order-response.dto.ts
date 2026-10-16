@@ -134,6 +134,18 @@ export class CustomerOrderDto {
   @ApiProperty({ example: 'Tehran' })
   regionName!: string;
 
+  @ApiPropertyOptional({ nullable: true, maxLength: 160 })
+  deliveryStoreName!: string | null;
+
+  @ApiPropertyOptional({ nullable: true, maxLength: 500 })
+  deliveryAddress!: string | null;
+
+  @ApiPropertyOptional({ nullable: true, minimum: -90, maximum: 90 })
+  deliveryLatitude!: number | null;
+
+  @ApiPropertyOptional({ nullable: true, minimum: -180, maximum: 180 })
+  deliveryLongitude!: number | null;
+
   @ApiProperty({
     oneOf: [{ type: 'number' }, { type: 'string' }],
   })
@@ -319,6 +331,10 @@ export function toCustomerOrderDto(order: OrderRecord): CustomerOrderDto {
     customerNote: order.customerNote ?? null,
     regionId: order.regionId,
     regionName: order.regionName,
+    deliveryStoreName: order.deliveryStoreName ?? null,
+    deliveryAddress: order.deliveryAddress ?? null,
+    deliveryLatitude: order.deliveryLatitude ?? null,
+    deliveryLongitude: order.deliveryLongitude ?? null,
     grossSubtotal: orderMoneyToJson(order.grossSubtotal),
     lineDiscountTotal: orderMoneyToJson(order.lineDiscountTotal),
     subtotalAfterLineDiscounts: orderMoneyToJson(

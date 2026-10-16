@@ -274,9 +274,9 @@ Concurrent refresh of the **same current** RT: exactly one rotation succeeds; th
 
 ### Logout
 
-| Endpoint                       | Behavior                                                                                     |
-| ------------------------------ | -------------------------------------------------------------------------------------------- |
-| `POST /api/v1/auth/logout`     | Optional AT; revoke current session when principal present; always clear cookies; idempotent. It intentionally does not change push-installation state because the contract does not identify an installation. |
+| Endpoint                       | Behavior                                                                                                                                                                                                                                                                                       |
+| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `POST /api/v1/auth/logout`     | Optional AT; revoke current session when principal present; always clear cookies; idempotent. It intentionally does not change push-installation state because the contract does not identify an installation.                                                                                 |
 | `POST /api/v1/auth/logout-all` | Requires AT (cookie or Bearer); revoke all user sessions and all active push installations for that User; clear cookies. Session and installation revocations are separate PostgreSQL operations, so the current implementation does not guarantee one shared transaction across both effects. |
 
 Access tokens are not blacklisted. After logout, a stolen AT may work until short expiry; refresh continuation is stopped.
@@ -500,7 +500,12 @@ OTP verified → verificationGrantId
   → create AuthSession + AT/RT cookies
 ```
 
-Business profile fields (store name, manager name, address, region, coordinates) are **not** collected at registration in AUTH-07. No in-repository legacy field inventory exists yet (`MIG-01` still PLANNED). Auth must not invent speculative profile columns. `profileComplete` is `true` for phone-only identity completeness and will be revised when evidenced business fields land.
+Business StoreProfile fields are **not** collected during OTP completion. OTP
+completion remains phone-only and does not require a StoreProfile. The separate
+Users-owned StoreProfile contains store name, address, latitude, and longitude
+and is completed after authentication through the profile API. `profileComplete`
+continues to mean phone-only identity completeness; clients that need ordering
+read `hasCompleteStoreProfile` from the current-user response instead.
 
 Region **reference** persistence and Admin/public list APIs exist as of CAT-02 (`instructions/catalog.md`). Customer profile `regionId` FK remains deferred until profile fields are evidenced; do not invent the FK here. REF-01 defines referral attribution policy, but referral persistence and registration integration remain out of scope for AUTH-07 and belong to REF-02/REF-03.
 
@@ -537,13 +542,25 @@ CSRF: pre-authentication grant consumption — `POST /auth/complete` has no auth
 
 #### Current user
 
-`GET /api/v1/auth/me` requires AT (cookie or Bearer). Returns safe identity DTO (`id`, `phone`, `isActive`, `profileComplete`, timestamps). Inactive accounts → `AUTH_ACCOUNT_DISABLED`.
+`GET /api/v1/auth/me` requires AT (cookie or Bearer). Returns the existing safe
+identity DTO (`id`, `phone`, `isActive`, `profileComplete`, timestamps) plus
+`storeProfile` (the four profile fields or `null`) and
+`hasCompleteStoreProfile`. Inactive accounts → `AUTH_ACCOUNT_DISABLED`.
 
 #### Profile update
 
-`PATCH /api/v1/users/me` derives the target exclusively from the authenticated principal. AUTH-07 allowlist has **no mutable business fields** yet; empty body is valid; unknown properties are rejected. Never mutate `id`, phone, `isActive`, or security fields via this endpoint. Phone change is a future verified operation.
+`PATCH /api/v1/users/me` derives the target exclusively from the authenticated
+principal. It accepts the four StoreProfile fields together and creates or
+replaces the owner’s profile. Store name and address are trimmed and bounded;
+latitude and longitude must be finite numbers in their geographic ranges.
+Unknown properties are rejected, and partial profile updates are rejected.
+Never mutate `id`, phone, `isActive`, or security fields via this endpoint.
+Phone change is a future verified operation.
 
-Profile address (when added later) is mutable current state. Future Orders capture immutable shipping snapshots and must not be rewritten by later profile edits.
+StoreProfile is mutable current state. Orders capture immutable delivery
+snapshots at creation and must not be rewritten by later profile edits. Exact
+profile location data is not exposed through public catalog or unauthenticated
+APIs; Admin access is separately permissioned.
 
 ### Grant consumption (ADR 0006)
 

@@ -8,6 +8,7 @@ export const OrderErrorCode = {
   INVALID_LINE: 'ORDER_INVALID_LINE',
   NOT_FOUND: 'ORDER_NOT_FOUND',
   INVALID_USER: 'ORDER_INVALID_USER',
+  STORE_PROFILE_REQUIRED: 'STORE_PROFILE_REQUIRED',
   INVALID_REGION: 'ORDER_INVALID_REGION',
   INVALID_PRODUCT: 'ORDER_INVALID_PRODUCT',
   IDEMPOTENCY_CONFLICT: 'ORDER_IDEMPOTENCY_CONFLICT',
@@ -66,6 +67,13 @@ export class OrderInvalidUserError extends ApplicationError {
   constructor(message: string) {
     super(OrderErrorCode.INVALID_USER, message, HttpStatus.BAD_REQUEST);
     this.name = 'OrderInvalidUserError';
+  }
+}
+
+export class StoreProfileRequiredError extends ApplicationError {
+  constructor(message = OrderMessage.STORE_PROFILE_REQUIRED) {
+    super(OrderErrorCode.STORE_PROFILE_REQUIRED, message, HttpStatus.CONFLICT);
+    this.name = 'StoreProfileRequiredError';
   }
 }
 

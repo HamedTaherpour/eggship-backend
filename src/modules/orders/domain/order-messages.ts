@@ -10,6 +10,7 @@ export const OrderMessage = {
   INVALID_INPUT: 'درخواست نامعتبر است.',
   INVALID_DELIVERY_AT: 'زمان تحویل نامعتبر است.',
   INVALID_USER: 'کاربر سفارش نامعتبر است.',
+  STORE_PROFILE_REQUIRED: 'تکمیل اطلاعات فروشگاه برای ثبت سفارش الزامی است.',
   INVALID_REGION: 'منطقه سفارش نامعتبر است.',
   PRODUCT_UNAVAILABLE: 'محصول پیدا نشد.',
   IDEMPOTENCY_CONFLICT:

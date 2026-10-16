@@ -118,6 +118,10 @@ describe('ORD-07 Admin Dispatch board (PostgreSQL integration)', () => {
     regionName: string;
     status: OrderStatus;
     customerPhone?: string;
+    deliveryStoreName?: string | null;
+    deliveryAddress?: string | null;
+    deliveryLatitude?: number | null;
+    deliveryLongitude?: number | null;
     deliveryAt?: Date | null;
     confirmedAt?: Date | null;
     shippedAt?: Date | null;
@@ -145,6 +149,10 @@ describe('ORD-07 Admin Dispatch board (PostgreSQL integration)', () => {
         total: BigInt(1000 * productIds.length),
         pricingEvaluatedAt: createdAt,
         commercePolicyRevision: 1,
+        deliveryStoreName: input.deliveryStoreName ?? null,
+        deliveryAddress: input.deliveryAddress ?? null,
+        deliveryLatitude: input.deliveryLatitude ?? null,
+        deliveryLongitude: input.deliveryLongitude ?? null,
         deliveryAt: input.deliveryAt ?? null,
         confirmedAt: input.confirmedAt ?? null,
         shippedAt: input.shippedAt ?? null,
@@ -183,6 +191,10 @@ describe('ORD-07 Admin Dispatch board (PostgreSQL integration)', () => {
       regionId: fixture.regionA.id,
       regionName: fixture.regionA.name,
       status: OrderStatus.CONFIRMED,
+      deliveryStoreName: 'Dispatch Store',
+      deliveryAddress: 'Dispatch Street',
+      deliveryLatitude: 35.6892,
+      deliveryLongitude: 51.389,
       deliveryAt: tEarly,
       confirmedAt: tCreated,
       createdAt: tCreated,
@@ -262,6 +274,10 @@ describe('ORD-07 Admin Dispatch board (PostgreSQL integration)', () => {
       aShippedLate,
     ]);
     expect(board.groups[0]!.orders[0]!.lineCount).toBe(2);
+    expect(board.groups[0]!.orders[0]).toMatchObject({
+      deliveryLatitude: 35.6892,
+      deliveryLongitude: 51.389,
+    });
     expect(board.groups[1]!.orders.map((o) => o.id)).toEqual([bConfirmedNull]);
 
     const returnedIds = board.groups.flatMap((g) => g.orders.map((o) => o.id));
