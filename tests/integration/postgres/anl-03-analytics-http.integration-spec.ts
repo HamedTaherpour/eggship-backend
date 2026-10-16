@@ -5,20 +5,20 @@ import { Test } from '@nestjs/testing';
 import jwt from 'jsonwebtoken';
 import request from 'supertest';
 import { ConfigModule } from '@nestjs/config';
-import { createConfigModuleOptions } from '../src/config/config-module.options';
-import { configureApplication } from '../src/app.setup';
-import { createOpenApiDocument } from '../src/common/openapi/openapi.document';
-import { ObservabilityModule } from '../src/common/observability/observability.module';
-import { AuthorizationModule } from '../src/common/authz/authorization.module';
-import { ADMIN_ROLE_RESOLVER } from '../src/common/authz/authorization.tokens';
-import { AdminRole } from '../src/common/authz/admin-role';
+import { createConfigModuleOptions } from '../../../src/config/config-module.options';
+import { configureApplication } from '../../../src/app.setup';
+import { createOpenApiDocument } from '../../../src/common/openapi/openapi.document';
+import { ObservabilityModule } from '../../../src/common/observability/observability.module';
+import { AuthorizationModule } from '../../../src/common/authz/authorization.module';
+import { ADMIN_ROLE_RESOLVER } from '../../../src/common/authz/authorization.tokens';
+import { AdminRole } from '../../../src/common/authz/admin-role';
 import type {
   AdminRoleResolver,
   AdminAuthorizationLookup,
-} from '../src/common/authz/admin-role-resolver';
-import { AuthSubjectType } from '../src/modules/auth/domain/subject-type';
-import { AnalyticsModule } from '../src/modules/analytics/analytics.module';
-import { PrismaModule } from '../src/infrastructure/database/prisma/prisma.module';
+} from '../../../src/common/authz/admin-role-resolver';
+import { AuthSubjectType } from '../../../src/modules/auth/domain/subject-type';
+import { AnalyticsModule } from '../../../src/modules/analytics/analytics.module';
+import { PrismaModule } from '../../../src/infrastructure/database/prisma/prisma.module';
 
 jest.setTimeout(30_000);
 
@@ -37,7 +37,7 @@ class Roles implements AdminRoleResolver {
   }
 }
 
-describe('ANL-03 analytics HTTP contract (real PostgreSQL e2e)', () => {
+describe('ANL-03 analytics HTTP contract (PostgreSQL integration)', () => {
   let app: INestApplication;
   let roles: Roles;
   const token = (subjectType: AuthSubjectType, subjectId = ADMIN_ID): string =>
