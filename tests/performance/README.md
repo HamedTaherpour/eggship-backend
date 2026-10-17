@@ -8,16 +8,26 @@ Cloud account is not required; the local k6 CLI is sufficient.
 
 Install k6 using the [official k6 installation guide](https://grafana.com/docs/k6/latest/set-up/install-k6/). For the local authenticated scenarios, prepare the ignored fixture/configuration files first:
 
-```bash
-NODE_ENV=development pnpm load:prepare
-set -a
-source .local/eggship-k6.env
-set +a
-pnpm load:validate
+Windows PowerShell workflow:
+
+```powershell
+# Terminal 1
+pnpm load:api
+
+# Terminal 2
+pnpm load:prepare
+pnpm load:smoke
 ```
 
+The isolated API reads `TEST_DATABASE_URL` from `.env`, runs on port `3001`,
+and maps that value to `DATABASE_URL` only in the child API process. The
+development API remains on port `3000` and `DATABASE_URL`. k6 commands load
+the generated `.local/eggship-k6.env` automatically; no connection strings
+or manual environment copying are required. Stop Terminal 1 with `Ctrl+C`.
+
 `load:prepare` refuses non-development or non-loopback PostgreSQL/API targets,
-test/staging/production/Liara markers, Redis DB 2, reset/reseed flags, and
+anything except the explicit local `eggship_test` database, port 3000,
+staging/production/Liara markers, Redis DB 2, reset/reseed flags, and
 non-development OTP providers. It verifies the canonical catalog/region,
 commerce, and inventory rows, authenticates synthetic customers through the
 real development OTP endpoints, provisions or reuses an ignored synthetic
@@ -54,7 +64,7 @@ For manual configuration or staging, export the required configuration:
 ```text
 LOAD_TESTS_ENABLED=true
 LOAD_TEST_ENV=local                 # local or staging; never production
-LOAD_TEST_BASE_URL=http://127.0.0.1:3000
+LOAD_TEST_BASE_URL=http://127.0.0.1:3001
 LOAD_TEST_USER_TOKENS=token-a,token-b
 LOAD_TEST_ADMIN_TOKEN=admin-token   # needed only for analytics
 LOAD_TEST_PRODUCT_IDS=uuid-a,uuid-b

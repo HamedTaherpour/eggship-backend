@@ -11,6 +11,7 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createPnpmProcess } from './lib/pnpm-process.mjs';
+import { acquireTestDatabaseLock } from './lib/load-test-target.mjs';
 
 const root = process.cwd();
 const suite = parseSuite(process.argv);
@@ -21,6 +22,19 @@ assertEnabled(env);
 assertSuiteTargets(env, suite);
 
 if (suite === 'all' || suite === 'postgres') {
+  const lockTarget = env['TEST_DATABASE_URL'];
+  const lockIdentity = lockTarget
+    ? postgresTargetIdentity(lockTarget)
+    : undefined;
+  if (!lockIdentity)
+    fail(
+      'TEST_DATABASE_URL must identify a dedicated local TEST database before integration tests start.',
+    );
+  const releaseLock = acquireTestDatabaseLock(
+    'PostgreSQL integration tests',
+    lockIdentity,
+  );
+  process.once('exit', releaseLock);
   runMigrations(env);
 }
 

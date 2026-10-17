@@ -27,6 +27,7 @@
     "test:e2e": "jest --config test/jest-e2e.config.ts --runInBand",
     "test:e2e:anl03": "node scripts/run-anl03-e2e.mjs",
     "load:validate": "node scripts/run-load-test.mjs --validate-only",
+    "load:api": "node scripts/load-api.mjs",
     "load:prepare": "node scripts/load-prepare.mjs",
     "load:smoke": "node scripts/run-load-test.mjs smoke",
     "load:browse": "node scripts/run-load-test.mjs browse",

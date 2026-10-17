@@ -34,8 +34,10 @@ map an explicit `TEST_DATABASE_URL` to `DATABASE_URL`; the same loopback guard
 then permits only `/eggship_test`. The command prints seeded customer/profile/
 order counts, snapshot counts, product IDs, prices, and available stock.
 
-Use `pnpm load:prepare` for the complete authenticated REL-03 fixture workflow
-after the canonical seed is present. It validates these fixed IDs and writes
+Use `pnpm load:api` in one PowerShell terminal, then `pnpm load:prepare` in a
+second terminal for the complete authenticated REL-03 fixture workflow after
+the canonical seed is present. The isolated API uses port 3001 and
+`TEST_DATABASE_URL`; it validates these fixed IDs and writes
 the ignored `.local/eggship-k6.env` configuration without printing tokens.
 Preparation checkpoints successful customer/Admin refresh sessions in the
 ignored `.local/eggship-k6-auth.json` file, so interrupted runs reuse valid

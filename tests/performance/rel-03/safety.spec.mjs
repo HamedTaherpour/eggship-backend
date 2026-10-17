@@ -4,6 +4,7 @@ import { describe, it } from 'node:test';
 import {
   buildK6Arguments,
   buildK6Environment,
+  resolveLocalLoadDatabase,
 } from '../../../scripts/run-load-test.mjs';
 
 const runner = 'scripts/run-load-test.mjs';
@@ -11,7 +12,7 @@ const base = {
   ...process.env,
   LOAD_TESTS_ENABLED: 'true',
   LOAD_TEST_ENV: 'local',
-  LOAD_TEST_BASE_URL: 'http://127.0.0.1:3000',
+  LOAD_TEST_BASE_URL: 'http://127.0.0.1:3001',
 };
 function rejects(overrides, text) {
   assert.throws(
@@ -26,6 +27,22 @@ function rejects(overrides, text) {
 }
 
 describe('REL-03 load-test safety', () => {
+  it('loads TEST_DATABASE_URL from the repository .env when absent from the process', () => {
+    const childEnv = { ...process.env };
+    delete childEnv.TEST_DATABASE_URL;
+    const output = execFileSync(
+      process.execPath,
+      [
+        '--input-type=module',
+        '-e',
+        "import { resolveLocalLoadDatabase } from './scripts/run-load-test.mjs'; console.log(resolveLocalLoadDatabase().databaseName)",
+      ],
+      { cwd: process.cwd(), env: childEnv, encoding: 'utf8' },
+    );
+    assert.equal(output.trim(), 'eggship_test');
+    assert.equal(resolveLocalLoadDatabase().databaseName, 'eggship_test');
+  });
+
   it('uses a global shared-iterations bound for order creation', () => {
     assert.equal(
       execFileSync(
@@ -39,7 +56,7 @@ describe('REL-03 load-test safety', () => {
     );
     const args = buildK6Arguments(
       {
-        baseUrl: 'http://127.0.0.1:3000',
+        baseUrl: 'http://127.0.0.1:3001',
         environment: 'local',
         name: 'orders',
         vus: 5,
@@ -56,7 +73,7 @@ describe('REL-03 load-test safety', () => {
   it('propagates the sanitized base URL to the k6 child environment', () => {
     const environment = buildK6Environment(
       {
-        baseUrl: 'http://127.0.0.1:3000',
+        baseUrl: 'http://127.0.0.1:3001',
         environment: 'local',
         name: 'smoke',
         vus: 2,
@@ -69,11 +86,11 @@ describe('REL-03 load-test safety', () => {
           'https://user:secret@staging.example.test/path?token=x',
       },
     );
-    assert.equal(environment.LOAD_TEST_BASE_URL, 'http://127.0.0.1:3000');
+    assert.equal(environment.LOAD_TEST_BASE_URL, 'http://127.0.0.1:3001');
   });
   it('passes non-secret runtime metadata explicitly at the k6 CLI boundary', () => {
     const config = {
-      baseUrl: 'http://127.0.0.1:3000',
+      baseUrl: 'http://127.0.0.1:3001',
       environment: 'local',
       name: 'smoke',
       vus: 2,
@@ -97,7 +114,7 @@ describe('REL-03 load-test safety', () => {
       '20s',
       '--include-system-env-vars',
       '-e',
-      'LOAD_TEST_BASE_URL=http://127.0.0.1:3000',
+      'LOAD_TEST_BASE_URL=http://127.0.0.1:3001',
       '-e',
       'LOAD_TEST_ENV=local',
       '-e',

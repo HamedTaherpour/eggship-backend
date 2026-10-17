@@ -6,7 +6,11 @@ function service(): CsrfService {
     getOrThrow: (key: string) =>
       key === 'CSRF_SECRET'
         ? 'unit-csrf-secret-at-least-32-characters!!'
-        : ['http://localhost:3000', 'https://admin.example.test'],
+        : [
+            'http://localhost:3000',
+            'http://localhost:3001',
+            'https://admin.example.test',
+          ],
   } as never);
 }
 
@@ -74,6 +78,31 @@ describe('CsrfService', () => {
         request({
           origin: 'http://localhost:3000',
           'sec-fetch-site': 'cross-site',
+          cookie: `eggship_csrf=${token}`,
+          'x-csrf-token': token,
+        }),
+        'customer',
+      ),
+    ).toThrow('The request origin is not allowed.');
+  });
+
+  it('accepts the isolated load origin and rejects the other loopback spelling', () => {
+    const csrf = service();
+    const token = csrf.issue('customer');
+    expect(() =>
+      csrf.validate(
+        request({
+          origin: 'http://localhost:3001',
+          cookie: `eggship_csrf=${token}`,
+          'x-csrf-token': token,
+        }),
+        'customer',
+      ),
+    ).not.toThrow();
+    expect(() =>
+      csrf.validate(
+        request({
+          origin: 'http://127.0.0.1:3001',
           cookie: `eggship_csrf=${token}`,
           'x-csrf-token': token,
         }),

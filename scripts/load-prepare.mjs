@@ -7,11 +7,12 @@ import pg from 'pg';
 import {
   assertFreshAccessToken,
   assertInventorySafety,
-  assertLoadPreparationSafety,
+  assertIsolatedLoadPreparationSafety,
   assertSyntheticOrderSnapshot,
   ApiRequestError,
   buildAdminProvisioningArgs,
   buildAdminProvisioningSpawnOptions,
+  formatAdminProvisioningFailure,
   buildAuthState,
   buildSyntheticOrderRequest,
   buildSyntheticStoreProfile,
@@ -19,10 +20,14 @@ import {
   parseRetryAfterSeconds,
   redactError,
 } from './lib/load-prepare-safety.mjs';
-import { createPnpmProcess } from './lib/pnpm-process.mjs';
+import {
+  databaseIdentity,
+  LOAD_API_ORIGIN,
+  requireLoadApiState,
+} from './lib/load-test-target.mjs';
 
 const { Client } = pg;
-const API_BASE_URL = process.env.LOAD_TEST_BASE_URL ?? 'http://127.0.0.1:3000';
+const API_BASE_URL = process.env.LOAD_TEST_BASE_URL ?? 'http://127.0.0.1:3001';
 const LOCAL_DIR = join(process.cwd(), '.local');
 const CONFIG_PATH = join(LOCAL_DIR, 'eggship-k6.env');
 const ADMIN_SECRET_PATH = join(LOCAL_DIR, 'eggship-k6-admin.json');
@@ -101,7 +106,7 @@ async function refreshAccessToken(
       headers: {
         Cookie: `${cookieName}=${refreshToken}; ${csrf.cookie}`,
         'X-CSRF-Token': csrf.token,
-        Origin: 'http://127.0.0.1:3000',
+        Origin: LOAD_API_ORIGIN,
       },
     });
     const accessToken = accessTokenFromResponse(
@@ -137,7 +142,7 @@ async function authenticateCustomer(phone) {
   const csrf = await getCsrf('customer');
   const csrfHeaders = {
     'X-CSRF-Token': csrf.token,
-    Origin: 'http://127.0.0.1:3000',
+    Origin: LOAD_API_ORIGIN,
     Cookie: csrf.cookie,
   };
   const requested = await requestJson(
@@ -222,13 +227,20 @@ function writeAuthState(customers, admin = null) {
 }
 
 function provisionAdmin(secret) {
-  const pnpm = createPnpmProcess(buildAdminProvisioningArgs(secret.email));
-  const result = spawnSync(pnpm.command, pnpm.args, {
-    env: { ...process.env, EGGSHIP_ADMIN_CREATE_PASSWORD: secret.password },
-    ...buildAdminProvisioningSpawnOptions(),
-  });
-  if (result.status !== 0)
-    throw new Error('Synthetic Admin provisioning failed.');
+  const result = spawnSync(
+    process.execPath,
+    [
+      join(process.cwd(), 'scripts', 'admin-create.mjs'),
+      ...buildAdminProvisioningArgs(secret.email),
+    ],
+    {
+      env: { ...process.env, EGGSHIP_ADMIN_CREATE_PASSWORD: secret.password },
+      ...buildAdminProvisioningSpawnOptions(),
+    },
+  );
+  if (result.status !== 0) {
+    throw new Error(formatAdminProvisioningFailure(result));
+  }
 }
 
 async function authenticateAdmin(secret) {
@@ -238,7 +250,7 @@ async function authenticateAdmin(secret) {
     headers: {
       'Content-Type': 'application/json',
       'X-CSRF-Token': csrf.token,
-      Origin: 'http://127.0.0.1:3000',
+      Origin: LOAD_API_ORIGIN,
       Cookie: csrf.cookie,
     },
     body: JSON.stringify({ email: secret.email, password: secret.password }),
@@ -272,14 +284,22 @@ function writeShellConfig(values) {
 }
 
 async function prepare() {
-  const safety = assertLoadPreparationSafety({
+  const safety = assertIsolatedLoadPreparationSafety({
     nodeEnv: process.env.NODE_ENV,
-    databaseUrl: process.env.DATABASE_URL,
+    databaseUrl: process.env.TEST_DATABASE_URL,
     apiBaseUrl: API_BASE_URL,
     redisUrl: process.env.REDIS_URL,
     testDatabaseUrl: process.env.TEST_DATABASE_URL,
     testRedisUrl: process.env.TEST_REDIS_URL,
   });
+  requireLoadApiState(databaseIdentity(safety.databaseUrl), safety.apiBaseUrl);
+  const readiness = await fetch(`${safety.apiBaseUrl}/api/v1/health/readiness`);
+  if (!readiness.ok) {
+    throw new Error(
+      'The isolated load API is not ready; no load fixtures were changed.',
+    );
+  }
+  process.env.DATABASE_URL = safety.databaseUrl;
   if (process.env.OTP_PROVIDER && process.env.OTP_PROVIDER !== 'development') {
     throw new Error(
       'load:prepare requires OTP_PROVIDER=development and never calls a real SMS provider.',

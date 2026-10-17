@@ -1,4 +1,5 @@
 import { strict as assert } from 'node:assert';
+import { spawnSync } from 'node:child_process';
 import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { describe, it } from 'node:test';
 import { tmpdir } from 'node:os';
@@ -9,6 +10,8 @@ import {
   ApiRequestError,
   buildAdminProvisioningArgs,
   buildAdminProvisioningSpawnOptions,
+  classifyAdminProvisioningFailure,
+  formatAdminProvisioningFailure,
   buildAuthState,
   buildSyntheticOrderRequest,
   buildSyntheticStoreProfile,
@@ -16,7 +19,9 @@ import {
   ensureLoadPreparationDirectory,
   parseRetryAfterSeconds,
   redactError,
+  assertIsolatedLoadPreparationSafety,
 } from './lib/load-prepare-safety.mjs';
+import { LOAD_API_ORIGIN } from './lib/load-test-target.mjs';
 
 const safe = {
   nodeEnv: 'development',
@@ -26,6 +31,39 @@ const safe = {
 };
 
 describe('k6 fixture preparation safety', () => {
+  it('uses the canonical allowed Origin for the isolated load API', () => {
+    assert.equal(LOAD_API_ORIGIN, 'http://localhost:3001');
+    assert.notEqual(LOAD_API_ORIGIN, 'http://127.0.0.1:3001');
+  });
+
+  it('accepts only the isolated local test database and port', () => {
+    const isolated = assertIsolatedLoadPreparationSafety({
+      nodeEnv: 'development',
+      databaseUrl: 'postgresql://user:password@127.0.0.1:5432/eggship_test',
+      testDatabaseUrl: 'postgresql://user:password@127.0.0.1:5432/eggship_test',
+      apiBaseUrl: 'http://127.0.0.1:3001',
+      redisUrl: 'redis://127.0.0.1:6379/0',
+    });
+    assert.equal(isolated.databaseName, 'eggship_test');
+    assert.throws(
+      () =>
+        assertIsolatedLoadPreparationSafety({
+          nodeEnv: 'development',
+          databaseUrl: 'postgresql://user:password@127.0.0.1:5432/eggship',
+          apiBaseUrl: 'http://127.0.0.1:3001',
+        }),
+      /eggship_test/u,
+    );
+    assert.throws(
+      () =>
+        assertIsolatedLoadPreparationSafety({
+          nodeEnv: 'development',
+          databaseUrl: 'postgresql://user:password@127.0.0.1:5432/eggship_test',
+          apiBaseUrl: 'http://127.0.0.1:3000',
+        }),
+      /port 3001/u,
+    );
+  });
   it('rejects production, remote, test, and Redis DB 2 targets', () => {
     assert.throws(
       () => assertLoadPreparationSafety({ ...safe, nodeEnv: 'production' }),
@@ -105,9 +143,8 @@ describe('k6 fixture preparation safety', () => {
 
   it('keeps provisioning arguments shell-free and explicit', () => {
     assert.equal(buildAdminProvisioningSpawnOptions().shell, undefined);
+    assert.equal(buildAdminProvisioningSpawnOptions().maxBuffer, 1024 * 1024);
     assert.deepEqual(buildAdminProvisioningArgs('admin@test'), [
-      'admin:create',
-      '--',
       '--email',
       'admin@test',
       '--role',
@@ -115,6 +152,57 @@ describe('k6 fixture preparation safety', () => {
       '--confirm',
       'yes',
     ]);
+    assert.equal(
+      buildAdminProvisioningArgs('admin@test').includes('--'),
+      false,
+    );
+  });
+
+  it('rejects a standalone argument separator at the Admin CLI boundary', () => {
+    const result = spawnSync(
+      process.execPath,
+      ['scripts/admin-create.mjs', '--'],
+      {
+        encoding: 'utf8',
+      },
+    );
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /Unknown flag: --/u);
+  });
+
+  it('reports a redacted provisioning step and safe failure category', () => {
+    assert.equal(
+      classifyAdminProvisioningFailure(
+        'Admin password does not meet the minimum policy.',
+      ),
+      'password',
+    );
+    assert.equal(
+      classifyAdminProvisioningFailure('ECONNREFUSED postgres database'),
+      'database',
+    );
+    assert.equal(
+      classifyAdminProvisioningFailure(
+        'An admin with this email already exists.',
+      ),
+      'duplicate',
+    );
+    const message = formatAdminProvisioningFailure({
+      status: 1,
+      stderr:
+        'Admin password does not meet the minimum policy.\nELIFECYCLE Command failed with exit code 1',
+      stdout: '',
+    });
+    assert.match(message, /during admin:create \[password; exit code 1\]/u);
+    assert.match(message, /minimum policy/u);
+    assert.doesNotMatch(message, /ELIFECYCLE/u);
+
+    const redacted = formatAdminProvisioningFailure({
+      status: 1,
+      stderr: 'DATABASE_URL=postgresql://user:secret@localhost/eggship_test',
+      stdout: '',
+    });
+    assert.doesNotMatch(redacted, /secret|postgresql:\/\//u);
   });
 
   it('creates the ignored local directory before provisioning writes credentials', () => {

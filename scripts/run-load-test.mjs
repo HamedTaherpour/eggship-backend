@@ -2,6 +2,18 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { config as loadDotEnv } from 'dotenv';
+import {
+  parseLoadApiTarget,
+  parseLocalTestDatabase,
+  requireLoadApiState,
+} from './lib/load-test-target.mjs';
+
+// Keep repository configuration (including TEST_DATABASE_URL) available to
+// the runner. The generated file contains only k6 runtime values and must not
+// replace explicit process or repository environment variables.
+loadDotEnv({ path: resolve('.env'), quiet: true });
+loadDotEnv({ path: resolve('.local/eggship-k6.env'), quiet: true });
 
 const scenarios = {
   smoke: { file: 'smoke.js', vus: 2, duration: '20s', required: [] },
@@ -80,8 +92,18 @@ export function validateConfiguration(name) {
   )
     fail('production-like target rejected');
   const loopback = ['localhost', '127.0.0.1', '::1'].includes(host);
-  if (environment === 'local' && !loopback)
-    fail('local runs require a loopback target');
+  if (environment === 'local') {
+    if (!loopback) fail('local runs require a loopback target');
+    try {
+      parseLoadApiTarget(baseUrl);
+    } catch (error) {
+      fail(
+        error instanceof Error
+          ? error.message
+          : 'isolated local load target rejected',
+      );
+    }
+  }
   if (
     environment === 'staging' &&
     value('LOAD_TEST_RUNNER_APPROVED') !== 'true'
@@ -122,6 +144,10 @@ export function buildK6Environment(config, source = process.env) {
     LOAD_TEST_DURATION: config.duration,
     LOAD_TEST_ARTIFACT_STAMP: config.artifactStamp,
   };
+}
+
+export function resolveLocalLoadDatabase(source = process.env) {
+  return parseLocalTestDatabase(source.TEST_DATABASE_URL);
 }
 
 export function buildK6Arguments(config, script) {
@@ -182,6 +208,10 @@ export function main(args = process.argv.slice(2)) {
     console.log('REL-03 load-test configuration is valid for all scenarios.');
   } else {
     const config = validateConfiguration(name);
+    if (config.environment === 'local') {
+      const database = resolveLocalLoadDatabase();
+      requireLoadApiState(database.identity, config.baseUrl);
+    }
     const artifactDir = resolve('artifacts/load-tests');
     mkdirSync(artifactDir, { recursive: true });
     const artifactStamp = new Date().toISOString().replace(/[:.]/gu, '-');

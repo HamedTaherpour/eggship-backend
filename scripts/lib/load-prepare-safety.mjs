@@ -1,5 +1,10 @@
 import { parseApprovedDevelopmentDatabase } from './dev-seed-safety.mjs';
 import { mkdirSync } from 'node:fs';
+import {
+  databaseIdentity,
+  parseLoadApiTarget,
+  parseLocalTestDatabase,
+} from './load-test-target.mjs';
 
 const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '::1']);
 
@@ -87,6 +92,47 @@ export function assertLoadPreparationSafety(input) {
     databaseName,
     apiBaseUrl: api.toString().replace(/\/$/u, ''),
   };
+}
+
+export function assertIsolatedLoadPreparationSafety(input) {
+  if (input.nodeEnv !== 'development') {
+    throw new Error('isolated load:prepare requires NODE_ENV=development.');
+  }
+  const database = parseLocalTestDatabase(input.databaseUrl);
+  const apiBaseUrl = parseLoadApiTarget(input.apiBaseUrl);
+  if (
+    input.testDatabaseUrl &&
+    databaseIdentity(input.testDatabaseUrl) !== database.identity
+  ) {
+    throw new Error(
+      'TEST_DATABASE_URL and the load preparation database do not match.',
+    );
+  }
+  if (input.redisUrl) assertDevelopmentRedis(input.redisUrl);
+  if (input.testRedisUrl && input.testRedisUrl === input.redisUrl) {
+    throw new Error('load preparation must not reuse TEST_REDIS_URL.');
+  }
+  return {
+    databaseName: database.databaseName,
+    databaseUrl: database.url.toString(),
+    apiBaseUrl,
+  };
+}
+
+function assertDevelopmentRedis(raw) {
+  const redis = parseUrl(raw, 'REDIS_URL');
+  if (!['redis:', 'rediss:'].includes(redis.protocol)) {
+    throw new Error('REDIS_URL must use redis:// or rediss://.');
+  }
+  if (!LOOPBACK_HOSTS.has(redis.hostname.toLowerCase())) {
+    throw new Error('REDIS_URL must point to a loopback host.');
+  }
+  const databaseIndex = redis.pathname.replace(/^\//u, '') || '0';
+  if (!/^\d+$/u.test(databaseIndex) || databaseIndex === '2') {
+    throw new Error(
+      'REDIS_URL must use a numeric development DB other than Redis DB 2.',
+    );
+  }
 }
 
 export function assertInventorySafety(rows, minimumAvailable) {
@@ -190,20 +236,77 @@ export function buildAdminProvisioningSpawnOptions() {
   return {
     stdio: ['ignore', 'pipe', 'pipe'],
     encoding: 'utf8',
+    maxBuffer: 1024 * 1024,
   };
 }
 
-export function buildAdminProvisioningArgs(email) {
-  return [
-    'admin:create',
-    '--',
-    '--email',
-    email,
-    '--role',
-    'SUPER_ADMIN',
-    '--confirm',
-    'yes',
+export function classifyAdminProvisioningFailure(message) {
+  const value = String(message ?? '').toLowerCase();
+  if (
+    value.includes('password does not meet') ||
+    value.includes('weakadminpassword')
+  ) {
+    return 'password';
+  }
+  if (
+    value.includes('database_url') ||
+    value.includes('confirmation') ||
+    value.includes('password') ||
+    value.includes('required')
+  ) {
+    return 'configuration';
+  }
+  if (value.includes('already exists') || value.includes('unique constraint')) {
+    return 'duplicate';
+  }
+  if (
+    value.includes('postgres') ||
+    value.includes('prisma') ||
+    value.includes('database') ||
+    value.includes('connection')
+  ) {
+    return 'database';
+  }
+  return 'process';
+}
+
+function provisioningDiagnosticLines(value) {
+  if (typeof value !== 'string') return [];
+  return value
+    .split(/\r?\n/u)
+    .map((line) => redactError(line).trim())
+    .filter(
+      (line) =>
+        line !== '' &&
+        !/^ELIFECYCLE\b/iu.test(line) &&
+        !/^Command failed with exit code\b/iu.test(line) &&
+        !/^pnpm\s+/iu.test(line),
+    );
+}
+
+export function formatAdminProvisioningFailure(result) {
+  // The nested CLI writes the useful failure to stderr, while pnpm appends
+  // its generic ELIFECYCLE summary afterwards. Prefer the last meaningful
+  // nested line and exclude pnpm's wrapper noise.
+  const output = [
+    ...provisioningDiagnosticLines(result?.stderr),
+    ...provisioningDiagnosticLines(result?.stdout),
   ];
+  const detail = output.at(-1);
+  const category = classifyAdminProvisioningFailure(detail ?? result?.error);
+  const status =
+    Number.isInteger(result?.status) && result.status !== 0
+      ? `exit code ${result.status}`
+      : result?.signal
+        ? `signal ${result.signal}`
+        : result?.error?.code
+          ? `spawn error ${result.error.code}`
+          : 'unknown child-process failure';
+  return `Synthetic Admin provisioning failed during admin:create [${category}; ${status}]${detail ? `: ${detail}` : '.'}`;
+}
+
+export function buildAdminProvisioningArgs(email) {
+  return ['--email', email, '--role', 'SUPER_ADMIN', '--confirm', 'yes'];
 }
 
 export function ensureLoadPreparationDirectory(path) {
@@ -247,6 +350,7 @@ export function redactError(error) {
   const message = error instanceof Error ? error.message : String(error);
   return message
     .replace(/Bearer\s+[A-Za-z0-9._~-]+/giu, 'Bearer [REDACTED]')
-    .replace(/(postgres(?:ql)?:\/\/)[^@\s/]+@/giu, '$1[REDACTED]@')
+    .replace(/postgres(?:ql)?:\/\/[^\s,;]+/giu, '[REDACTED DATABASE URL]')
+    .replace(/\b(password|token|secret)\s*[=:]\s*[^\s,;]+/giu, '$1=[REDACTED]')
     .replace(/\b[A-Za-z0-9_-]{80,}\b/gu, '[REDACTED]');
 }

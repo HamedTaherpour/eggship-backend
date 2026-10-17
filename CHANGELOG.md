@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Add the isolated Windows local k6 workflow: `pnpm load:api` runs a guarded
+  port-3001 API against `TEST_DATABASE_URL`, while fixture preparation and
+  local k6 commands require the matching TEST database and API process.
+
 - Update bounded k6 fixture preparation to provision deterministic StoreProfiles
   and verify order delivery snapshots without changing load scenarios or thresholds.
 - Extend deterministic development/test seed fixtures with StoreProfiles, a
